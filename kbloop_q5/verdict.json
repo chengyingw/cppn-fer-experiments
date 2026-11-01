@@ -1,0 +1,158 @@
+{
+ "table_sha256": "d06abea69eb0",
+ "rows": 1224,
+ "claims": [
+  {
+   "id": "K9401",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim: on its own knobs PBd is left with at most half the error of G0 after an edit; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pbd_learns_skull: ratio=19.287 (PBd_r0_knobpb=0.1393, replay0_knobpb=0.007225)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_learns_butterfly: ratio=10.368 (PBd_r0_knobpb=0.1494, replay0_knobpb=0.01442)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_learns_apple: ratio=13.313 (PBd_r0_knobpb=0.0223, replay0_knobpb=0.001675)"
+    }
+   ]
+  },
+  {
+   "id": "K9402",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim: the same with only the evolved edges free (PBa); >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pba_learns_skull: ratio=18.927 (PBa_r0_knobpb=0.1367, replay0_knobpb=0.007225)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pba_learns_butterfly: ratio=13.467 (PBa_r0_knobpb=0.1941, replay0_knobpb=0.01442)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pba_learns_apple: ratio=24.734 (PBa_r0_knobpb=0.04143, replay0_knobpb=0.001675)"
+    }
+   ]
+  },
+  {
+   "id": "K9403",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim: on a first edit from the original image PBd changes pixels outside the edit at most half as much as G0; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pbd_outside_skull: ratio=1.841 (PBd_r0_knobpb=0.6299, replay0_knobpb=0.3422)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_outside_butterfly: ratio=1.146 (PBd_r0_knobpb=0.583, replay0_knobpb=0.5086)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_outside_apple: ratio=2.905 (PBd_r0_knobpb=0.6086, replay0_knobpb=0.2095)"
+    }
+   ]
+  },
+  {
+   "id": "K9404",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim: the same for PBa; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pba_outside_skull: ratio=1.007 (PBa_r0_knobpb=0.3445, replay0_knobpb=0.3422)"
+    },
+    {
+     "state": "PASS",
+     "message": "pba_outside_butterfly: ratio=0.253 (PBa_r0_knobpb=0.1285, replay0_knobpb=0.5086)"
+    },
+    {
+     "state": "PASS",
+     "message": "pba_outside_apple: ratio=0.360 (PBa_r0_knobpb=0.07536, replay0_knobpb=0.2095)"
+    }
+   ]
+  },
+  {
+   "id": "K9405",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim, the continual-learning test: learning the second knob costs PBd at most half the forgetting of the first that it costs G0, at no replay; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_skull: ratio=1.051 (PBd_r0_knobpb=0.4383, replay0_knobpb=0.4169)"
+    },
+    {
+     "state": "BAND",
+     "message": "pbd_forget_butterfly: ratio=0.776 (PBd_r0_knobpb=0.3841, replay0_knobpb=0.495)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_apple: ratio=1.609 (PBd_r0_knobpb=0.2446, replay0_knobpb=0.152)"
+    }
+   ]
+  },
+  {
+   "id": "K9406",
+   "verdict": "FALSIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim: the same for PBa; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "pba_forget_skull: ratio=0.934 (PBa_r0_knobpb=0.3893, replay0_knobpb=0.4169)"
+    },
+    {
+     "state": "BAND",
+     "message": "pba_forget_butterfly: ratio=0.628 (PBa_r0_knobpb=0.3106, replay0_knobpb=0.495)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pba_forget_apple: ratio=1.239 (PBa_r0_knobpb=0.1885, replay0_knobpb=0.152)"
+    }
+   ]
+  },
+  {
+   "id": "K9407",
+   "verdict": "VERIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim, the control for the favourable construction: on knobs taken from a dense network, PBd has no such advantage: R_after at least equal to G0; <= 0.5 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "control_skull: ratio=37.008 (PBd_r0_knobg0=0.2306, replay0_knobg0=0.00623)"
+    },
+    {
+     "state": "PASS",
+     "message": "control_butterfly: ratio=8.798 (PBd_r0_knobg0=0.1098, replay0_knobg0=0.01247)"
+    },
+    {
+     "state": "PASS",
+     "message": "control_apple: ratio=8.694 (PBd_r0_knobg0=0.01673, replay0_knobg0=0.001925)"
+    }
+   ]
+  },
+  {
+   "id": "K9408",
+   "verdict": "VERIFIED",
+   "text": "Regime: pairs of knob edits in both orders, RTX 4060, original output, 500 steps per edit, at the training learning rate. A knob moves one existing weight of a source network by 1 and changes a visible part of its image. With source pb the targets are renders of the Picbreeder network, so it reaches them exactly by moving those weights, which favours Picbreeder by construction. PBd has every weight free, PBa only its existing edges, G0 is fully fitted dense networks. The Picbreeder rows of a task come from one network, so these describe that network. Informed by every earlier test, so not blind. Claim, the condition for reading K9405: G0 learns these edits, median R_after at most 0.3; >= 0.6 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "g0_learns_skull: median=0.007 (replay0_knobpb)"
+    },
+    {
+     "state": "PASS",
+     "message": "g0_learns_butterfly: median=0.014 (replay0_knobpb)"
+    },
+    {
+     "state": "PASS",
+     "message": "g0_learns_apple: median=0.002 (replay0_knobpb)"
+    }
+   ]
+  }
+ ]
+}
