@@ -1,0 +1,153 @@
+
+C-001 [VERIFIED] -> VERIFIED: SGD does not reach the skull when only the NEAT links of the raw architecture can learn.
+  PASS   c001_skull_fit: count=0, need <= 1
+
+C-002 [INCONCLUSIVE] -> INCONCLUSIVE: Weights that SGD finds on Picbreeder wiring do not reproduce the symmetry Picbreeder weights achieve on neurons whose parity the wiring leaves free.
+  NODATA c002_m1x_butterfly: not enough fitted runs for G1b (low=0.58333, high=0.04945, test=None)
+  NODATA c002_m1x_apple: not enough fitted runs for G1b (low=0.78947, high=0.11684, test=None)
+
+C-003 [INCONCLUSIVE] -> INCONCLUSIVE: Most of the Picbreeder-vs-dense gap in perturbation asymmetry comes from the wiring, not from how the weights were found.
+  NODATA c003_m3a_skull: not enough fitted runs for G1b (low=0.33069, high=0.41166, test=None)
+  NODATA c003_m3a_butterfly: not enough fitted runs for G1b (low=0.28003, high=0.43851, test=None)
+  NODATA c003_m3a_apple: not enough fitted runs for G1b (low=0.04838, high=0.27965, test=None)
+  NODATA c003_m4a_skull: not enough fitted runs for G1b (low=0.33582, high=0.41136, test=None)
+  NODATA c003_m4a_butterfly: not enough fitted runs for G1b (low=0.27695, high=0.44578, test=None)
+  NODATA c003_m4a_apple: not enough fitted runs for G1b (low=0.05116, high=0.27524, test=None)
+
+C-004 [WITHDRAWN]: Design error found in a dry run before any G4 data: Picbreeder's per-layer edge counts go as low as 1 on skull, so magnitude pruning to those counts would sever output channels and make a fit failure an artifact. Replaced by C-005.
+
+C-005 [FALSIFIED] -> FALSIFIED: Sparsity alone does not close the gap: pruning a dense SGD network to the same total edge count leaves its symmetry metrics near those of the dense network.
+  NODATA c005_m1_skull: not enough fitted runs for G4 (low=0.9, high=0.04183, test=None)
+  NODATA c005_m1_butterfly: not enough fitted runs for G4 (low=0.84375, high=0.05234, test=None)
+  FAIL   c005_m1_apple: r=0.146 (PB=0.875, G4=0.764, G0=0.117)
+  NODATA c005_m3a_skull: not enough fitted runs for G4 (low=0.33069, high=0.41166, test=None)
+  NODATA c005_m3a_butterfly: not enough fitted runs for G4 (low=0.28003, high=0.43851, test=None)
+  FAIL   c005_m3a_apple: r=-0.023 (PB=0.048, G4=0.043, G0=0.280)
+  NODATA c005_m4a_skull: not enough fitted runs for G4 (low=0.33582, high=0.41136, test=None)
+  NODATA c005_m4a_butterfly: not enough fitted runs for G4 (low=0.27695, high=0.44578, test=None)
+  FAIL   c005_m4a_apple: r=-0.055 (PB=0.051, G4=0.039, G0=0.275)
+  NODATA c005_m1x_butterfly: not enough fitted runs for G4 (low=0.58333, high=0.04945, test=None)
+  FAIL   c005_m1x_apple: r=0.050 (PB=0.789, G4=0.756, G0=0.117)
+
+C-006 [FALSIFIED] -> FALSIFIED: Fit level alone does not make a network Picbreeder-like: a dense network stopped at the fit level of the pruned networks keeps symmetry metrics near those of the fully trained dense network.
+  PASS   c006_m1_butterfly: r=0.968 (PB=0.844, G0e=0.077, G0=0.052)
+  BAND   c006_m1_apple: r=0.477 (PB=0.875, G0e=0.513, G0=0.117)
+  PASS   c006_m1x_butterfly: r=0.957 (PB=0.583, G0e=0.072, G0=0.049)
+  BAND   c006_m1x_apple: r=0.411 (PB=0.789, G0e=0.513, G0=0.117)
+  PASS   c006_m3a_butterfly: r=0.821 (PB=0.280, G0e=0.410, G0=0.439)
+  FAIL   c006_m3a_apple: r=0.034 (PB=0.048, G0e=0.056, G0=0.280)
+  PASS   c006_m4a_butterfly: r=0.781 (PB=0.277, G0e=0.409, G0=0.446)
+  FAIL   c006_m4a_apple: r=0.040 (PB=0.051, G0e=0.060, G0=0.275)
+
+C-007 [VERIFIED] -> VERIFIED: Whether the gap survives at a coarse fit depends on the task: on apple dense networks at MSE 0.0065 already score like Picbreeder on M3a and M4a; on butterfly they stay near the fully trained network.
+  PASS   c007_m3a_apple: r=0.034 (PB=0.048, G0e=0.056, G0=0.280)
+  PASS   c007_m4a_apple: r=0.040 (PB=0.051, G0e=0.060, G0=0.275)
+  PASS   c007_m3a_butterfly: r=0.821 (PB=0.280, G0e=0.410, G0=0.439)
+  PASS   c007_m4a_butterfly: r=0.781 (PB=0.277, G0e=0.409, G0=0.446)
+
+C-008 [FALSIFIED] -> FALSIFIED: Fixing the copy edges at 1 and training only NEAT links makes butterfly fit reliably.
+  FAIL   c008_butterfly_fit: count=0, need >= 4
+
+C-009 [INCONCLUSIVE] -> INCONCLUSIVE: On butterfly at a similar fit level, Picbreeder wiring with SGD-found weights is closer to Picbreeder than to a dense network, on symmetry metrics.
+  NODATA c009_m1: not enough fitted runs for G1b (low=0.84375, high=0.07735, test=None)
+  NODATA c009_m1x: not enough fitted runs for G1b (low=0.58333, high=0.07222, test=None)
+  NODATA c009_m3a: not enough fitted runs for G1b (low=0.28003, high=0.41016, test=None)
+  NODATA c009_m4a: not enough fitted runs for G1b (low=0.27695, high=0.40879, test=None)
+
+C-010 [INCONCLUSIVE] -> INCONCLUSIVE: On butterfly at a similar fit level, sparsity alone does not make a network Picbreeder-like: pruned networks stay closer to a dense network.
+  NODATA c010_m1: not enough fitted runs for G4 (low=0.84375, high=0.07735, test=None)
+  NODATA c010_m1x: not enough fitted runs for G4 (low=0.58333, high=0.07222, test=None)
+  NODATA c010_m3a: not enough fitted runs for G4 (low=0.28003, high=0.41016, test=None)
+  NODATA c010_m4a: not enough fitted runs for G4 (low=0.27695, high=0.40879, test=None)
+
+C-011 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBd), a network learns a local symmetric edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.
+  NODATA c011_f_skull: not enough data (PBd=None, G0=0.061336)
+  NODATA c011_f_butterfly: not enough data (PBd=None, G0=0.086224)
+  NODATA c011_f_apple: not enough data (PBd=None, G0=None)
+  FAIL   c011_a1_skull: ratio=25.000 (PBd=2000, G0=80)
+  FAIL   c011_a1_butterfly: ratio=40.000 (PBd=2000, G0=50)
+  PASS   c011_a1_apple: ratio=1.000 (PBd=2000, G0=2000)
+
+C-012 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBd), a network learns a local symmetry-breaking edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.
+  NODATA c012_f_skull: not enough data (PBd=None, G0=0.071266)
+  NODATA c012_f_butterfly: not enough data (PBd=None, G0=0.085125)
+  NODATA c012_f_apple: not enough data (PBd=None, G0=None)
+  FAIL   c012_a1_skull: ratio=50.000 (PBd=2000, G0=40)
+  FAIL   c012_a1_butterfly: ratio=50.000 (PBd=2000, G0=40)
+  PASS   c012_a1_apple: ratio=1.000 (PBd=2000, G0=2000)
+
+C-013 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBd), a network adapts to a symmetric horizontal scale warp of its image at least twice as fast as a fully fitted dense network.
+  FAIL   c013_a1_skull: ratio=100.000 (PBd=2000, G0=20)
+  FAIL   c013_a1_butterfly: ratio=100.000 (PBd=2000, G0=20)
+  FAIL   c013_a1_apple: ratio=3.000 (PBd=30, G0=10)
+
+C-014 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBd), a network adapts to a horizontal shift warp of its image at least twice as fast as a fully fitted dense network.
+  FAIL   c014_a1_skull: ratio=66.667 (PBd=2000, G0=30)
+  FAIL   c014_a1_butterfly: ratio=66.667 (PBd=2000, G0=30)
+  FAIL   c014_a1_apple: ratio=3.000 (PBd=30, G0=10)
+
+C-015 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBa), a network learns a local symmetric edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.
+  NODATA c015_f_skull: not enough data (PBa=None, G0=0.061336)
+  NODATA c015_f_butterfly: not enough data (PBa=None, G0=0.086224)
+  NODATA c015_f_apple: not enough data (PBa=None, G0=None)
+  FAIL   c015_a1_skull: ratio=25.000 (PBa=2000, G0=80)
+  FAIL   c015_a1_butterfly: ratio=40.000 (PBa=2000, G0=50)
+  PASS   c015_a1_apple: ratio=1.000 (PBa=2000, G0=2000)
+
+C-016 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBa), a network learns a local symmetry-breaking edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.
+  NODATA c016_f_skull: not enough data (PBa=None, G0=0.071266)
+  NODATA c016_f_butterfly: not enough data (PBa=None, G0=0.085125)
+  NODATA c016_f_apple: not enough data (PBa=None, G0=None)
+  FAIL   c016_a1_skull: ratio=50.000 (PBa=2000, G0=40)
+  FAIL   c016_a1_butterfly: ratio=50.000 (PBa=2000, G0=40)
+  PASS   c016_a1_apple: ratio=1.000 (PBa=2000, G0=2000)
+
+C-017 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBa), a network adapts to a symmetric horizontal scale warp of its image at least twice as fast as a fully fitted dense network.
+  FAIL   c017_a1_skull: ratio=100.000 (PBa=2000, G0=20)
+  FAIL   c017_a1_butterfly: ratio=3.500 (PBa=70, G0=20)
+  FAIL   c017_a1_apple: ratio=9.000 (PBa=90, G0=10)
+
+C-018 [FALSIFIED] -> FALSIFIED: Starting from Picbreeder (PBa), a network adapts to a horizontal shift warp of its image at least twice as fast as a fully fitted dense network.
+  FAIL   c018_a1_skull: ratio=66.667 (PBa=2000, G0=30)
+  FAIL   c018_a1_butterfly: ratio=66.667 (PBa=2000, G0=30)
+  FAIL   c018_a1_apple: ratio=196.000 (PBa=1960, G0=10)
+
+C-019 [VERIFIED] -> VERIFIED: At the training learning rate, a Picbreeder start leaves at least twice the remaining edit error of a fully fitted dense network after 2000 steps, on skull and butterfly.
+  PASS   c019_skull_local_sym: ratio=9.350 (PBd=0.08004, G0=0.00856)
+  PASS   c019_skull_local_asym: ratio=32.665 (PBd=0.1676, G0=0.00513)
+  PASS   c019_skull_warp_sym: ratio=61.352 (PBd=0.4927, G0=0.00803)
+  PASS   c019_skull_warp_asym: ratio=22.406 (PBd=0.1994, G0=0.0089)
+  PASS   c019_butterfly_local_sym: ratio=21.190 (PBd=0.1068, G0=0.00504)
+  PASS   c019_butterfly_local_asym: ratio=12.079 (PBd=0.07622, G0=0.00631)
+  PASS   c019_butterfly_warp_sym: ratio=13.325 (PBd=0.144, G0=0.01081)
+  PASS   c019_butterfly_warp_asym: ratio=7.684 (PBd=0.1063, G0=0.01384)
+
+C-020 [VERIFIED] -> VERIFIED: Lowering the learning rate tenfold does not remove the gap in remaining edit error on skull and butterfly, so the gap is not only a learning-rate mismatch.
+  PASS   c020_skull_local_sym: ratio=22.497 (PBd=0.1516, G0=0.00674)
+  PASS   c020_skull_local_asym: ratio=33.227 (PBd=0.1668, G0=0.00502)
+  PASS   c020_skull_warp_sym: ratio=5.834 (PBd=0.03296, G0=0.00565)
+  PASS   c020_skull_warp_asym: ratio=22.154 (PBd=0.1943, G0=0.00877)
+  PASS   c020_butterfly_local_sym: ratio=36.665 (PBd=0.1456, G0=0.00397)
+  PASS   c020_butterfly_local_asym: ratio=34.102 (PBd=0.1337, G0=0.00392)
+  PASS   c020_butterfly_warp_sym: ratio=4.188 (PBd=0.0258, G0=0.00616)
+  PASS   c020_butterfly_warp_asym: ratio=7.478 (PBd=0.1653, G0=0.02211)
+
+C-021 [VERIFIED] -> VERIFIED: Local edits on apple are hard for both starts: neither leaves less than half the other's remaining edit error after 2000 steps.
+  PASS   c021_local_sym_pb_over_dense: ratio=1.061 (PBd=0.2254, G0=0.2124)
+  PASS   c021_local_asym_pb_over_dense: ratio=1.062 (PBd=0.2122, G0=0.1999)
+  PASS   c021_local_sym_dense_over_pb: ratio=0.942 (G0=0.2124, PBd=0.2254)
+  PASS   c021_local_asym_dense_over_pb: ratio=0.942 (G0=0.1999, PBd=0.2122)
+
+C-022 [PRE_REGISTERED] -> VERIFIED: After 2000 steps on a local edit, a Picbreeder start has changed its output outside the edit at least twice as much as a fully fitted dense network, while also leaving more or similar error inside it.
+  PASS   c022_skull_local_sym_lr1.0: ratio=31.501 (PBd=1.217, G0=0.03863)
+  PASS   c022_skull_local_sym_lr0.1: ratio=3.812 (PBd=0.08839, G0=0.02319)
+  PASS   c022_skull_local_asym_lr1.0: ratio=24.083 (PBd=1.016, G0=0.04218)
+  PASS   c022_skull_local_asym_lr0.1: ratio=4.603 (PBd=0.115, G0=0.02499)
+  PASS   c022_butterfly_local_sym_lr1.0: ratio=5.814 (PBd=0.351, G0=0.06037)
+  PASS   c022_butterfly_local_sym_lr0.1: ratio=2.163 (PBd=0.1093, G0=0.05054)
+  PASS   c022_butterfly_local_asym_lr1.0: ratio=7.487 (PBd=0.3637, G0=0.04857)
+  PASS   c022_butterfly_local_asym_lr0.1: ratio=2.235 (PBd=0.09798, G0=0.04383)
+  PASS   c022_apple_local_sym_lr1.0: ratio=2.232 (PBd=0.01522, G0=0.00682)
+  PASS   c022_apple_local_sym_lr0.1: ratio=3.134 (PBd=0.01498, G0=0.00478)
+  PASS   c022_apple_local_asym_lr1.0: ratio=5.834 (PBd=0.03156, G0=0.00541)
+  PASS   c022_apple_local_asym_lr0.1: ratio=3.667 (PBd=0.01067, G0=0.00291)

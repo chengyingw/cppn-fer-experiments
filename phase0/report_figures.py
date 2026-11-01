@@ -135,12 +135,44 @@ def fig_continual(rows):
     plt.close(fig)
 
 
+def fig_tradeoff(rows):
+    """Local edits at 2000 steps: error left inside the edit against change outside it. Lower left is better on both."""
+    groups = [('PBa', 'Picbreeder，只动现存边'), ('PBd', 'Picbreeder，全部权重可学'), ('G0', '稠密，训练到底')]
+    fig, axes = plt.subplots(2, 3, figsize=(10, 6.2), sharex=True, sharey=True)
+    for r, lr in enumerate([1.0, 0.1]):
+        for c, t in enumerate(TASKS):
+            ax = axes[r, c]
+            for g, label in groups:
+                pts = [x for x in rows if x['task'] == t and x['group'] == g and x['lr_scale'] == lr
+                       and x['edit_class'].startswith('local')]
+                ax.scatter([x['R2000'] for x in pts], [x['F2000'] for x in pts], s=38, marker=MARK[g], color=COLOR[g],
+                           edgecolor=SURFACE, linewidth=0.8, label=label, zorder=3)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.grid(color=GRID, lw=0.6)
+            ax.set_axisbelow(True)
+            ax.tick_params(length=0)
+            ax.set_title(f'{TASK_LABEL[t]}，学习率 ×{lr:g}', loc='left', fontsize=10)
+    for ax in axes[1]:
+        ax.set_xlabel('改动区域内的剩余误差 R（2000 步）')
+    for ax in axes[:, 0]:
+        ax.set_ylabel('区域外的变动 F（2000 步）')
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, ncol=3, frameon=False, fontsize=9, loc='lower center')
+    fig.suptitle('局部改动：左下角最好。Picbreeder 起点在区域外的变动更大；苹果上偶有区域内误差更低的情况（事后描述，每图一个网络）',
+                 x=0.01, ha='left', fontsize=10)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+    fig.savefig(os.path.join(OUT, 'report_tradeoff.png'), dpi=160)
+    plt.close(fig)
+
+
 def main():
     exp, con = load('experiments_db.jsonl'), load('continual_db.jsonl')
     fig_wiring(exp)
     fig_fit_level(exp)
     fig_sparse_fit(exp)
     fig_continual(con)
+    fig_tradeoff(load('continual_db_v2.jsonl'))
 
 
 if __name__ == '__main__':

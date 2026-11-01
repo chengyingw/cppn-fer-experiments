@@ -2223,7 +2223,7 @@
    }
   ],
   "parents": [],
-  "status": "PRE_REGISTERED"
+  "status": "VERIFIED"
  },
  "C-020": {
   "claim_id": "C-020",
@@ -2411,7 +2411,7 @@
    }
   ],
   "parents": [],
-  "status": "PRE_REGISTERED"
+  "status": "VERIFIED"
  },
  "C-021": {
   "claim_id": "C-021",
@@ -2511,6 +2511,283 @@
    }
   ],
   "parents": [],
-  "status": "PRE_REGISTERED"
+  "status": "VERIFIED"
+ },
+ "C-022": {
+  "claim_id": "C-022",
+  "statement": "After 2000 steps on a local edit, a Picbreeder start has changed its output outside the edit at least twice as much as a fully fitted dense network, while also leaving more or similar error inside it.",
+  "scope": "phase0/continual_v2.py at 2000 steps, 64x64, same edits and optimizer as C-011 to C-018, learning rate stated per check. R is remaining error toward the new target, relative to the edit's size; its normalization does not depend on the network. Only fully fitted networks: PBd, PBa, G0. Written after seeing the earlier continual-learning results, so these are remeasurements with informed predictions, not blind tests. Picbreeder is one network per task and its edits are not independent samples, so results describe these networks and do not generalize to Picbreeder networks. Medians are descriptive. R at a fixed step needs no censoring. F is the change from the network's own starting output, relative to E0, read at a fixed step.",
+  "group": "PBd",
+  "flip_boundary": "Unknown. Only these edits, two learning rates and one Picbreeder network per task were measured.",
+  "prediction": "Post-hoc description of results already seen, not a prediction. It is kept as a regression lock and is no independent evidence. Ratio >= 2 passes, ratio <= 1 fails, between them is MIXED.",
+  "checks": [
+   {
+    "check_id": "c022_skull_local_sym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_skull_local_sym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_skull_local_asym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_skull_local_asym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_butterfly_local_sym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_butterfly_local_sym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_butterfly_local_asym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_butterfly_local_asym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_apple_local_sym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_apple_local_sym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_apple_local_asym_lr1.0",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c022_apple_local_asym_lr0.1",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "F2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": [],
+  "status": "VERIFIED",
+  "note": "Correction: \"more or similar error\" in the statement is too broad. On apple local_sym at lr_scale 0.1, PBd has lower R2000 than G0 (0.142 vs 0.213), a trade of more change outside for less error inside. The checks test F only, so they do not cover the error clause."
  }
 }
