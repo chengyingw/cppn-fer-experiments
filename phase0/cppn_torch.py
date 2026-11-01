@@ -240,7 +240,8 @@ class DenseCPPN:
         feats = [h]
         for W in weights[:-1]:
             h = self.activate(torch.matmul(h, W[:, None]))
-            feats.append(h)
+            if return_features:
+                feats.append(h)
         out = torch.matmul(h, weights[-1][:, None]).reshape(B, N, 3)
         if return_features:
             return out, [f.reshape(B, N, -1) for f in feats]

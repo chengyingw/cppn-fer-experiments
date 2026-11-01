@@ -148,20 +148,26 @@ def main():
     os.makedirs(args.curves, exist_ok=True)
     X = coord_inputs(RES, DEV)
     rows = []
+    if os.path.exists(args.db):  # resume: a finished task, group and learning rate is not run again
+        with open(args.db, encoding='utf-8') as f:
+            rows = [json.loads(l) for l in f if l.strip()]
+    done = {(r['task'], r['group'], r['lr_scale']) for r in rows}
     for task in args.names:
         net_pb, ws_pb, _ = pb_network(task, DEV)
         with torch.no_grad():
             old, edits = make_edits(net_pb, ws_pb, X)
         for group, net, ws, seeds, tags, tm, vm in networks(task, net_pb, ws_pb):
             for lr_scale in LR_SCALES:
+                if (task, group, lr_scale) in done:
+                    continue
                 r, curves = run_group(task, group, net, ws, seeds, tags, tm, vm, old, edits, X, args.iters, lr_scale)
                 rows += r
                 np.savez_compressed(os.path.join(args.curves, f'{task}_{group}_lr{lr_scale}.npz'), **curves)
+                with open(args.db, 'a', encoding='utf-8') as f:
+                    for x in r:
+                        f.write(json.dumps(x, ensure_ascii=False) + '\n')
                 print(task, group, 'lr x', lr_scale, 'networks', len(seeds), 'adapted',
                       sum(x['adapted'] for x in r), '/', len(r), flush=True)
-    with open(args.db, 'w', encoding='utf-8') as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + '\n')
 
 
 if __name__ == '__main__':
