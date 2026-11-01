@@ -1,0 +1,173 @@
+[
+ {
+  "claim_id": "C-006",
+  "statement": "Fit level alone does not make a network Picbreeder-like: a dense network stopped at the fit level of the pruned networks keeps symmetry metrics near those of the fully trained dense network.",
+  "scope": "128x128 image regression on the three Picbreeder CPPNs, 50k iterations, Adam with unit-norm gradients, fit = MSE < 0.01. Perturbations act on existing edges only; matched window of mean |dRGB| in [0.02, 0.10]. G0e is the dense architecture and seeds of G0, stopped the first time its full-image MSE is at most 0.0065, about the median MSE of fitted G4 runs on butterfly (0.0067) and apple (0.0066). Written after seeing the G4 results, as a check on how to read C-005; skull has no fitted G4 run to match.",
+  "group": "G0e",
+  "flip_boundary": "Early training may favour low-frequency symmetric features on near-symmetric targets, which would lower r most on apple.",
+  "prediction": "For M1, M1x, M3a and M4a on butterfly and apple, r = (G0e - PB) / (G0 - PB) is at least 0.7. If r <= 0.3, fit level can explain that gap, and the C-005 falsification on apple does not show a sparsity effect.",
+  "checks": [
+   {
+    "check_id": "c006_m1_butterfly",
+    "type": "position",
+    "metric": "M1",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m1_apple",
+    "type": "position",
+    "metric": "M1",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m1x_butterfly",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m1x_apple",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m3a_butterfly",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m3a_apple",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m4a_butterfly",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c006_m4a_apple",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G0e",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   }
+  ],
+  "parents": []
+ }
+]

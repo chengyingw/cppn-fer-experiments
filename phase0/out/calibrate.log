@@ -1,0 +1,52 @@
+﻿
+=== skull  (base image asym share: pb 0.141)
+metric                   pb     sgd0     sgd1     sgd2   separates?
+M1_mirror_frac        0.900    0.042    0.050    0.035   YES
+M2_distinct          20.000  263.000  262.000  260.000   YES
+M3_asym_single        0.222    0.412    0.399    0.424   YES
+M3m_asym_single_matched    0.330    0.412    0.400    0.427   YES
+M4_asym_randdir       0.236    0.407    0.385    0.418   YES
+M4m_asym_randdir_matched    0.307    0.411    0.386    0.419   YES
+M5_hf_single          0.414    0.515    0.537    0.526   YES
+M5_hf_randdir         0.439    0.517    0.545    0.535   YES
+  n_nonconst             97      264      264      262
+  valid_single       0.2431   0.7028   0.7334   0.7444
+  valid_randdir       0.525   0.7969   0.7919   0.7887
+  change_single      0.1301  0.03404  0.03438  0.03629
+  change_randdir     0.1145  0.04127  0.04181  0.03915
+  fit_mse               nan 0.0004565 0.0003121 0.0003349
+sgd_butterfly.pt: excluded unfitted seeds [(0, 0.10334982722997665)]
+
+=== butterfly  (base image asym share: pb 0.075)
+metric                   pb     sgd0     sgd1   separates?
+M1_mirror_frac        0.844    0.052    0.055   YES
+M2_distinct          32.000  363.000  366.000   YES
+M3_asym_single        0.228    0.431    0.452   YES
+M3m_asym_single_matched    0.269    0.427    0.439   YES
+M4_asym_randdir       0.238    0.433    0.453   YES
+M4m_asym_randdir_matched    0.272    0.431    0.446   YES
+M5_hf_single          0.616    0.630    0.622   YES
+M5_hf_randdir         0.626    0.667    0.641   YES
+  n_nonconst            190      367      368
+  valid_single       0.2906   0.4384   0.4975
+  valid_randdir         0.6   0.5412   0.5769
+  change_single     0.08625  0.02222  0.02276
+  change_randdir    0.08159  0.02548   0.0259
+  fit_mse               nan 0.0005877 0.0005068
+
+=== apple  (base image asym share: pb 0.013)
+metric                   pb     sgd0     sgd1     sgd2   separates?
+M1_mirror_frac        0.875    0.115    0.117    0.188   YES
+M2_distinct          64.000 1244.000 1241.000 1237.000   YES
+M3_asym_single        0.059    0.294    0.304    0.267   YES
+M3m_asym_single_matched    0.052    0.280    0.287    0.252   YES
+M4_asym_randdir       0.071    0.297    0.309    0.238   YES
+M4m_asym_randdir_matched    0.075    0.275    0.290    0.203   YES
+M5_hf_single          0.109    0.259    0.302    0.277   YES
+M5_hf_randdir         0.157    0.279    0.283    0.279   YES
+  n_nonconst            698     1254     1254     1254
+  valid_single       0.2356   0.3784   0.3403   0.3694
+  valid_randdir      0.5319   0.4344   0.3994   0.4425
+  change_single     0.02765  0.01895  0.01768  0.01858
+  change_randdir    0.04433  0.02012  0.01933  0.02098
+  fit_mse               nan 5.317e-05 3.659e-05 3.393e-05

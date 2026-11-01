@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+# Third-party clones and the paper PDF; fetch the pinned sources with setup_refs.sh
+refs/
+
+# Timing and debug stand-ins, not experimental results
+phase0/out_debug/
+phase0/runs_timing/
+
+# Contains a local machine path
+phase0/out/figures.log
+
+.verify_clone/

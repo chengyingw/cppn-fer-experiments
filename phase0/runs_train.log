@@ -1,0 +1,18 @@
+skull it  10000  loss [0.001426 0.001794 0.001187]      56s
+skull it  20000  loss [0.001004 0.000703 0.000776]     120s
+skull it  30000  loss [0.000479 0.000661 0.00079 ]     176s
+skull it  40000  loss [0.000537 0.000399 0.000752]     247s
+skull it  49999  loss [0.000457 0.000312 0.000335]     303s
+saved skull 303s
+butterfly it  10000  loss [0.10335  0.001048 0.00172 ]      80s
+butterfly it  20000  loss [0.10335  0.000548 0.001209]     160s
+butterfly it  30000  loss [0.10335  0.000386 0.000499]     241s
+butterfly it  40000  loss [0.10335  0.000533 0.000523]    2026s
+butterfly it  49999  loss [0.10335  0.000588 0.000507]    2119s
+saved butterfly 2119s
+apple it  10000  loss [0.000304 0.00013  0.000263]     271s
+apple it  20000  loss [1.04e-04 6.40e-05 1.35e-04]     542s
+apple it  30000  loss [6.2e-05 5.4e-05 6.4e-05]     813s
+apple it  40000  loss [7.2e-05 5.4e-05 4.4e-05]    1084s
+apple it  49999  loss [5.3e-05 3.7e-05 3.4e-05]    1354s
+saved apple 1355s

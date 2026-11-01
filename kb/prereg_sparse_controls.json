@@ -1,0 +1,442 @@
+[
+ {
+  "claim_id": "C-001",
+  "statement": "SGD does not reach the skull when only the NEAT links of the raw architecture can learn.",
+  "scope": "128x128 image regression on the three Picbreeder CPPNs, 50k iterations, Adam with unit-norm gradients, fit = MSE < 0.01. Perturbations act on existing edges only; matched window of mean |dRGB| in [0.02, 0.10].",
+  "group": "G1a",
+  "prediction": "At most 1 of 3 G1a seeds on skull reaches MSE < 0.01, replicating FER paper Fig. 12.",
+  "flip_boundary": "Unknown; the fit threshold is looser than dense SGD (about 5e-4), so a pass here is a weak fit.",
+  "checks": [
+   {
+    "check_id": "c001_skull_fit",
+    "type": "count",
+    "where": {
+     "task": "skull",
+     "group": "G1a",
+     "fit": true
+    },
+    "where_total": {
+     "task": "skull",
+     "group": "G1a"
+    },
+    "min_total": 3,
+    "op": "<=",
+    "value": 1
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-002",
+  "statement": "Weights that SGD finds on Picbreeder wiring do not reproduce the symmetry Picbreeder weights achieve on neurons whose parity the wiring leaves free.",
+  "scope": "128x128 image regression on the three Picbreeder CPPNs, 50k iterations, Adam with unit-norm gradients, fit = MSE < 0.01. Perturbations act on existing edges only; matched window of mean |dRGB| in [0.02, 0.10]. Wiring facts known before registration: the Picbreeder masks force the parity of 82%/59%/38% of distinct maps (skull/butterfly/apple), for any weights. Skull is excluded: its Picbreeder network has only 3 free maps.",
+  "group": "G1b",
+  "prediction": "For M1x, r = (G1b - PB) / (G0 - PB) is at least 0.7 on butterfly and apple. r <= 0.3 falsifies: the wiring would then be sufficient. Between them is MIXED.",
+  "flip_boundary": "Low redundancy on a sparse network may push SGD toward reuse, which would lower r.",
+  "checks": [
+   {
+    "check_id": "c002_m1x_butterfly",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c002_m1x_apple",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-003",
+  "statement": "Most of the Picbreeder-vs-dense gap in perturbation asymmetry comes from the wiring, not from how the weights were found.",
+  "scope": "128x128 image regression on the three Picbreeder CPPNs, 50k iterations, Adam with unit-norm gradients, fit = MSE < 0.01. Perturbations act on existing edges only; matched window of mean |dRGB| in [0.02, 0.10]. Wiring facts known before registration: the Picbreeder masks force the parity of 82%/59%/38% of distinct maps (skull/butterfly/apple), for any weights.",
+  "group": "G1b",
+  "prediction": "For M3a and M4a, r = (G1b - PB) / (G0 - PB) is at most 0.3 on all three tasks. r >= 0.7 falsifies. Between them is MIXED.",
+  "flip_boundary": "Weaker where the mask forces less parity, so apple is the most likely to break this.",
+  "checks": [
+   {
+    "check_id": "c003_m3a_skull",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "skull"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   },
+   {
+    "check_id": "c003_m3a_butterfly",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   },
+   {
+    "check_id": "c003_m3a_apple",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   },
+   {
+    "check_id": "c003_m4a_skull",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "skull"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   },
+   {
+    "check_id": "c003_m4a_butterfly",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   },
+   {
+    "check_id": "c003_m4a_apple",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G1b",
+    "min_n": 2,
+    "pass": {
+     "op": "<=",
+     "value": 0.3
+    },
+    "fail": {
+     "op": ">=",
+     "value": 0.7
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-004",
+  "statement": "Sparsity alone does not close the gap: pruning a dense SGD network to the same edge count per layer leaves its symmetry metrics near those of the dense network.",
+  "scope": "128x128 image regression on the three Picbreeder CPPNs, 50k iterations, Adam with unit-norm gradients, fit = MSE < 0.01. Perturbations act on existing edges only; matched window of mean |dRGB| in [0.02, 0.10]. G4 keeps the Picbreeder edge count in each layer, but SGD chooses the edges by magnitude. M1x excludes skull, whose Picbreeder network has only 3 free maps.",
+  "group": "G4",
+  "prediction": "For M1, M3a and M4a on all tasks, and M1x on butterfly and apple, r = (G4 - PB) / (G0 - PB) is at least 0.7. r <= 0.3 on any falsifies: sparsity would then explain that gap. Between them is MIXED.",
+  "flip_boundary": "Pruning may keep near-symmetric edges if the near-symmetric target rewards them.",
+  "checks": [
+   {
+    "check_id": "c004_m1_skull",
+    "type": "position",
+    "metric": "M1",
+    "where": {
+     "task": "skull"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m1_butterfly",
+    "type": "position",
+    "metric": "M1",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m1_apple",
+    "type": "position",
+    "metric": "M1",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m3a_skull",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "skull"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m3a_butterfly",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m3a_apple",
+    "type": "position",
+    "metric": "M3a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m4a_skull",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "skull"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m4a_butterfly",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m4a_apple",
+    "type": "position",
+    "metric": "M4a",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m1x_butterfly",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "butterfly"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   },
+   {
+    "check_id": "c004_m1x_apple",
+    "type": "position",
+    "metric": "M1x",
+    "where": {
+     "task": "apple"
+    },
+    "low_group": "PB",
+    "high_group": "G0",
+    "test_group": "G4",
+    "min_n": 2,
+    "pass": {
+     "op": ">=",
+     "value": 0.7
+    },
+    "fail": {
+     "op": "<=",
+     "value": 0.3
+    }
+   }
+  ],
+  "parents": []
+ }
+]
