@@ -72,8 +72,14 @@ def run(task, group, disc_xy, straight, net, ws, mask, old):
     return dict(R=R, F=F, s_clip=((s < 0) | (s > 1)).float().mean().item(), v_clip=(v.abs() > 1).float().mean().item())
 
 
+TASKS = ('skull', 'butterfly', 'apple')
+MODES = (False, True)
+if len(sys.argv) > 1 and sys.argv[1] == 'replicate':
+    # Pre-registered in st_replicate.md: apple only, straight-through only, all four discs, no PBa.
+    TASKS, MODES = ('apple',), (True,)
+    DISCS = [(-0.4, -0.4), (0.4, -0.4), (-0.4, 0.4), (0.4, 0.4)]
 print('task       group  mode  n   R500    F500    s_clip  v_clip')
-for task in ('skull', 'butterfly', 'apple'):
+for task in TASKS:
     net_pb, ws_pb, _ = pb_network(task, DEV)
     with torch.no_grad():
         old = net_pb.render(ws_pb, X, RES)[0]
@@ -84,7 +90,9 @@ for task in ('skull', 'butterfly', 'apple'):
     mask = [(W != 0).float() for W in ws_pb]
     groups = [('PBd', net_pb, [ws_pb], None), ('PBa', net_pb, [ws_pb], mask), ('G0', dense, dense_ws, None)]
     for group, net, nets, m in groups:
-        for straight in (False, True):
+        if len(MODES) == 1 and group == 'PBa':
+            continue
+        for straight in MODES:
             rows = [run(task, group, d, straight, net, ws, m, old) for ws in nets for d in DISCS]
             med = lambda k: st.median(r[k] for r in rows)
             print(f"{task:10s} {group:5s} {'st' if straight else 'hard':4s} {len(rows):2d}  {med('R'):.4f}  {med('F'):.4f}  "
