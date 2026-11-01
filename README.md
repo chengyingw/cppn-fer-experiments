@@ -33,6 +33,7 @@
 | `phase0/continual.py` | 持续学习测试：已拟合的网络再学 12 种小改动 |
 | `phase0/continual_v2.py`、`kb/continual_db_v2.jsonl` | 重测：固定步数记录改动区域的剩余误差和区域外变动，指标不依赖被测网络 |
 | `phase0/calibrate.py`、`phase0/figures.py` | 第 0 阶段校准和图 |
+| `report_figures/` | 汇报用的结果图和逐张解释，以及和 CPPN、kb-loop 的关系 |
 | `phase0/report_figures.py` | 从测量表生成汇报图（`phase0/out/report_*.png`） |
 | `phase0/runs/`、`phase0/out/` | 训练好的权重、校准结果和图 |
 | `kb/experiments_db.jsonl` | 每个网络、每个 seed 一行的测量表 |
