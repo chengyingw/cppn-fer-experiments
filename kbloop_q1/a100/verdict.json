@@ -1,0 +1,62 @@
+{
+ "table_sha256": "3cb248b0119d",
+ "rows": 704,
+ "claims": [
+  {
+   "id": "K9001",
+   "verdict": "MIXED",
+   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: with no replay, a later edit erases much of an earlier one on skull and butterfly: median forget >= 0.3; <= 0.05 falsifies; between is mixed.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "no_replay_forgets_skull: median=0.211 (replay0)"
+    },
+    {
+     "state": "BAND",
+     "message": "no_replay_forgets_butterfly: median=0.196 (replay0)"
+    }
+   ]
+  },
+  {
+   "id": "K9002",
+   "verdict": "MIXED",
+   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: forgetting depends on replay on skull and butterfly: median forget at no replay minus at full replay >= 0.2; <= 0.05 falsifies; between is mixed.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "replay_dependence_skull: difference=0.200 (replay0=0.2108, replay1=0.01068)"
+    },
+    {
+     "state": "BAND",
+     "message": "replay_dependence_butterfly: difference=0.191 (replay0=0.1963, replay1=0.00518)"
+    }
+   ]
+  },
+  {
+   "id": "K9003",
+   "verdict": "FALSIFIED",
+   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: 5% replay is enough for a large reduction on skull and butterfly: median forget at 5% is at most half of no replay; >= 0.9 of it falsifies; between is mixed.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "five_percent_skull: ratio=0.920 (replay0.05=0.1939, replay0=0.2108)"
+    },
+    {
+     "state": "FAIL",
+     "message": "five_percent_butterfly: ratio=1.030 (replay0.05=0.2022, replay0=0.1963)"
+    }
+   ]
+  },
+  {
+   "id": "K9004",
+   "verdict": "MIXED",
+   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: local edits stay hard on apple within this budget even with full replay: median R_after >= 0.1; <= 0.05 falsifies; between is mixed. Earlier edits were at other positions, so this may not carry over.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "apple_hard: median=0.080 (replay1)"
+    }
+   ]
+  }
+ ]
+}

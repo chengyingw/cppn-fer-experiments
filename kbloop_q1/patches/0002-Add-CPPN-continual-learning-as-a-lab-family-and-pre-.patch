@@ -1,0 +1,1205 @@
+From 61a020c88ab39847b2ee366997541b9f73201fff Mon Sep 17 00:00:00 2001
+From: chengyingw <1424556745@qq.com>
+Date: Sun, 1 Nov 2026 17:14:46 +0800
+Subject: [PATCH 2/2] Add CPPN continual-learning as a lab family and
+ pre-register its test
+
+kb_lab.run_job now routes cppn_continual/<task> to kb_cppn, so run_experiment can vary
+replay, learning rate and budget like other lab overrides. kb_checks gains difference
+and median table checks for the replay curve. K9001 to K9004 are frozen by this commit,
+before any full run.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ research/cppn_continual_20261101/README.md    |  13 +
+ research/cppn_continual_20261101/make_seed.py |  41 +++
+ research/cppn_continual_20261101/seed_kb.json | 170 +++++++++++
+ src/aiq_kb/cppn_gpu/continual_seq.py          | 197 +++++++++++++
+ src/aiq_kb/cppn_gpu/cppn_torch.py             | 274 ++++++++++++++++++
+ src/aiq_kb/kb_checks.py                       |  23 +-
+ src/aiq_kb/kb_cppn.py                         | 203 +++++++++++++
+ src/aiq_kb/kb_lab.py                          |   4 +
+ tests/test_kb_cppn.py                         | 141 +++++++++
+ 9 files changed, 1061 insertions(+), 5 deletions(-)
+ create mode 100644 research/cppn_continual_20261101/README.md
+ create mode 100755 research/cppn_continual_20261101/make_seed.py
+ create mode 100644 research/cppn_continual_20261101/seed_kb.json
+ create mode 100755 src/aiq_kb/cppn_gpu/continual_seq.py
+ create mode 100755 src/aiq_kb/cppn_gpu/cppn_torch.py
+ create mode 100755 src/aiq_kb/kb_cppn.py
+ create mode 100755 tests/test_kb_cppn.py
+
+diff --git a/research/cppn_continual_20261101/README.md b/research/cppn_continual_20261101/README.md
+new file mode 100644
+index 0000000..6d69010
+--- /dev/null
++++ b/research/cppn_continual_20261101/README.md
+@@ -0,0 +1,13 @@
++# CPPN sequence test (2026-11-01)
++
++Question: when fitted dense CPPNs learn local edits in sequence, how much do they forget, and how much replay holds it down?
++
++Pre-registered in `seed_kb.json` by the commit that adds this file, before any full run. Results live outside this
++repository, in the lab directory, because `*.jsonl` and `**/results/` are not tracked here.
++
++    export AIQ_CPPN_PYTHON=<interpreter with a GPU> AIQ_CPPN_ASSETS=<dir with genomes/ and nets/>
++    PYTHONPATH=src python -m aiq_kb.kb_cppn run LAB_DIR
++    PYTHONPATH=src python -m aiq_kb.kb_cppn settle research/cppn_continual_20261101/seed_kb.json LAB_DIR/cppn_continual_db.jsonl
++
++No model is called. Assets are the Picbreeder genomes from akarshkumar0101/fer and dense networks trained in
++chengyingw/cppn-fer-experiments. These are toy results on one image per task and do not generalize beyond these networks.
+diff --git a/research/cppn_continual_20261101/make_seed.py b/research/cppn_continual_20261101/make_seed.py
+new file mode 100755
+index 0000000..a64e8ab
+--- /dev/null
++++ b/research/cppn_continual_20261101/make_seed.py
+@@ -0,0 +1,41 @@
++"""Writes seed_kb.json: the claims for the sequence test, frozen by a commit made before any run."""
++import json
++from pathlib import Path
++
++SCOPE = ('Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion '
++         'learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; '
++         'loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn '
++         'once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. '
++         'Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. ')
++TWO = ['skull', 'butterfly']
++
++
++def band(kind, label, metric, task, ok, bad, **fields):
++    return {'type': kind, 'label': label, 'metric': metric, 'where': {'task': task}, **fields,
++            'pass': dict(zip(('op', 'value'), ok)), 'fail': dict(zip(('op', 'value'), bad))}
++
++
++claims = [
++    dict(id='K9001',
++         text=SCOPE + 'Claim: with no replay, a later edit erases much of an earlier one on skull and butterfly: median '
++                      'forget >= 0.3; <= 0.05 falsifies; between is mixed.',
++         checks=[band('median', f'no_replay_forgets_{t}', 'forget', t, ('>=', 0.3), ('<=', 0.05), group='replay0', min_n=10)
++                 for t in TWO]),
++    dict(id='K9002',
++         text=SCOPE + 'Claim: forgetting depends on replay on skull and butterfly: median forget at no replay minus at full '
++                      'replay >= 0.2; <= 0.05 falsifies; between is mixed.',
++         checks=[band('difference', f'replay_dependence_{t}', 'forget', t, ('>=', 0.2), ('<=', 0.05),
++                      group_a='replay0', group_b='replay1', min_n=10) for t in TWO]),
++    dict(id='K9003',
++         text=SCOPE + 'Claim: 5% replay is enough for a large reduction on skull and butterfly: median forget at 5% is at most '
++                      'half of no replay; >= 0.9 of it falsifies; between is mixed.',
++         checks=[band('ratio', f'five_percent_{t}', 'forget', t, ('<=', 0.5), ('>=', 0.9),
++                      group_a='replay0.05', group_b='replay0', min_n=10) for t in TWO]),
++    dict(id='K9004',
++         text=SCOPE + 'Claim: local edits stay hard on apple within this budget even with full replay: median R_after >= 0.1; '
++                      '<= 0.05 falsifies; between is mixed. Earlier edits were at other positions, so this may not carry over.',
++         checks=[band('median', 'apple_hard', 'R_after', 'apple', ('>=', 0.1), ('<=', 0.05), group='replay1', min_n=10)]),
++]
++for c in claims:
++    c.update(support_count=0, failure_count=0, origin='preregistered:cppn_continual_20261101')
++Path(__file__).with_name('seed_kb.json').write_text(json.dumps({'claims': claims}, indent=1))
+diff --git a/research/cppn_continual_20261101/seed_kb.json b/research/cppn_continual_20261101/seed_kb.json
+new file mode 100644
+index 0000000..cd51cc3
+--- /dev/null
++++ b/research/cppn_continual_20261101/seed_kb.json
+@@ -0,0 +1,170 @@
++{
++ "claims": [
++  {
++   "id": "K9001",
++   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: with no replay, a later edit erases much of an earlier one on skull and butterfly: median forget >= 0.3; <= 0.05 falsifies; between is mixed.",
++   "checks": [
++    {
++     "type": "median",
++     "label": "no_replay_forgets_skull",
++     "metric": "forget",
++     "where": {
++      "task": "skull"
++     },
++     "group": "replay0",
++     "min_n": 10,
++     "pass": {
++      "op": ">=",
++      "value": 0.3
++     },
++     "fail": {
++      "op": "<=",
++      "value": 0.05
++     }
++    },
++    {
++     "type": "median",
++     "label": "no_replay_forgets_butterfly",
++     "metric": "forget",
++     "where": {
++      "task": "butterfly"
++     },
++     "group": "replay0",
++     "min_n": 10,
++     "pass": {
++      "op": ">=",
++      "value": 0.3
++     },
++     "fail": {
++      "op": "<=",
++      "value": 0.05
++     }
++    }
++   ],
++   "support_count": 0,
++   "failure_count": 0,
++   "origin": "preregistered:cppn_continual_20261101"
++  },
++  {
++   "id": "K9002",
++   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: forgetting depends on replay on skull and butterfly: median forget at no replay minus at full replay >= 0.2; <= 0.05 falsifies; between is mixed.",
++   "checks": [
++    {
++     "type": "difference",
++     "label": "replay_dependence_skull",
++     "metric": "forget",
++     "where": {
++      "task": "skull"
++     },
++     "group_a": "replay0",
++     "group_b": "replay1",
++     "min_n": 10,
++     "pass": {
++      "op": ">=",
++      "value": 0.2
++     },
++     "fail": {
++      "op": "<=",
++      "value": 0.05
++     }
++    },
++    {
++     "type": "difference",
++     "label": "replay_dependence_butterfly",
++     "metric": "forget",
++     "where": {
++      "task": "butterfly"
++     },
++     "group_a": "replay0",
++     "group_b": "replay1",
++     "min_n": 10,
++     "pass": {
++      "op": ">=",
++      "value": 0.2
++     },
++     "fail": {
++      "op": "<=",
++      "value": 0.05
++     }
++    }
++   ],
++   "support_count": 0,
++   "failure_count": 0,
++   "origin": "preregistered:cppn_continual_20261101"
++  },
++  {
++   "id": "K9003",
++   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: 5% replay is enough for a large reduction on skull and butterfly: median forget at 5% is at most half of no replay; >= 0.9 of it falsifies; between is mixed.",
++   "checks": [
++    {
++     "type": "ratio",
++     "label": "five_percent_skull",
++     "metric": "forget",
++     "where": {
++      "task": "skull"
++     },
++     "group_a": "replay0.05",
++     "group_b": "replay0",
++     "min_n": 10,
++     "pass": {
++      "op": "<=",
++      "value": 0.5
++     },
++     "fail": {
++      "op": ">=",
++      "value": 0.9
++     }
++    },
++    {
++     "type": "ratio",
++     "label": "five_percent_butterfly",
++     "metric": "forget",
++     "where": {
++      "task": "butterfly"
++     },
++     "group_a": "replay0.05",
++     "group_b": "replay0",
++     "min_n": 10,
++     "pass": {
++      "op": "<=",
++      "value": 0.5
++     },
++     "fail": {
++      "op": ">=",
++      "value": 0.9
++     }
++    }
++   ],
++   "support_count": 0,
++   "failure_count": 0,
++   "origin": "preregistered:cppn_continual_20261101"
++  },
++  {
++   "id": "K9004",
++   "text": "Regime: fitted dense CPPNs on skull, butterfly and apple at 64x64; four non-overlapping discs of colour inversion learned in sequence, 500 steps each, in four cyclic orders; Adam reset each phase at the training learning rate; loss is mean error on the current disc plus mean error on replay pixels, with fixed weights; replay pixels drawn once per phase, labelled by the true cumulative target. Rows share networks, so medians describe these networks. Forgetting is R_final - R_after over all earlier discs, unfiltered; the learned subset is a sensitivity analysis. Claim: local edits stay hard on apple within this budget even with full replay: median R_after >= 0.1; <= 0.05 falsifies; between is mixed. Earlier edits were at other positions, so this may not carry over.",
++   "checks": [
++    {
++     "type": "median",
++     "label": "apple_hard",
++     "metric": "R_after",
++     "where": {
++      "task": "apple"
++     },
++     "group": "replay1",
++     "min_n": 10,
++     "pass": {
++      "op": ">=",
++      "value": 0.1
++     },
++     "fail": {
++      "op": "<=",
++      "value": 0.05
++     }
++    }
++   ],
++   "support_count": 0,
++   "failure_count": 0,
++   "origin": "preregistered:cppn_continual_20261101"
++  }
++ ]
++}
+\ No newline at end of file
+diff --git a/src/aiq_kb/cppn_gpu/continual_seq.py b/src/aiq_kb/cppn_gpu/continual_seq.py
+new file mode 100755
+index 0000000..379d487
+--- /dev/null
++++ b/src/aiq_kb/cppn_gpu/continual_seq.py
+@@ -0,0 +1,197 @@
++#!/usr/bin/env python3
++"""GPU side of the cppn_continual lab family: fitted dense CPPNs learn a sequence of local edits under a replay budget.
++
++Runs under whichever interpreter has a GPU (AIQ_CPPN_PYTHON), so it imports nothing from aiq_kb. One candidate per call.
++Each network learns the four discs in all four cyclic orders, so every disc comes first once. In each phase the loss is
++the mean error on the current disc plus the mean error on the replay pixels, with fixed weights, so a larger replay budget
++does not shrink the pressure to learn. Replay pixels are drawn once per phase, the same for all networks, from outside the
++current disc; their labels are the true cumulative target, which is the most favourable label source.
++"""
++import argparse
++import glob
++import json
++import os
++import statistics
++import sys
++import time
++
++import numpy as np
++import torch
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++from cppn_torch import DenseCPPN, coord_inputs, layerize, load_genome
++
++DEV = 'cuda'
++RES = 64
++FIT_RES = 128
++MAX_FIT_MSE = 0.01
++LR = {'skull': 3e-3, 'butterfly': 3e-3, 'apple': 3e-4}
++DISCS = [(-0.4, -0.4), (0.4, -0.4), (-0.4, 0.4), (0.4, 0.4)]
++RADIUS = 0.2
++MARGIN = 0.05
++ORDERS = [[0, 1, 2, 3], [1, 2, 3, 0], [2, 3, 0, 1], [3, 0, 1, 2]]
++LEARNED = 0.3
++
++
++def picbreeder(assets, task):
++    L = layerize(load_genome(os.path.join(assets, 'genomes', f'{task}.zip')))
++    return DenseCPPN(L['groups'], L['n_hidden']), [torch.tensor(W, dtype=torch.float32, device=DEV)[None] for W in L['weights']]
++
++
++def fitted_dense(assets, task, net_pb, ws_pb):
++    """Dense SGD networks whose image is within MAX_FIT_MSE of the Picbreeder target."""
++    X = coord_inputs(FIT_RES, DEV)
++    with torch.no_grad():
++        target = net_pb.render(ws_pb, X, FIT_RES)[0]
++    net, kept, seeds = None, [], []
++    for path in sorted(glob.glob(os.path.join(assets, 'nets', '*', f'sgd_{task}.pt'))):
++        ck = torch.load(path, weights_only=False)  # our own checkpoints, written by train_sgd.py
++        net = DenseCPPN(ck['groups'], ck['n_hidden'])
++        for k, seed in enumerate(ck['seeds']):
++            ws = [W[k:k + 1].to(DEV) for W in ck['weights']]
++            with torch.no_grad():
++                if ((net.render(ws, X, FIT_RES)[0] - target) ** 2).mean().item() < MAX_FIT_MSE:
++                    kept.append(ws)
++                    seeds.append(seed)
++    return net, [torch.cat([ws[l] for ws in kept]) for l in range(len(net.shapes))], seeds
++
++
++def fit(net, params, X, loss_fn, iters, lr):
++    """Full-batch Adam with per-network unit-norm gradients, captured as one CUDA graph."""
++    opt = torch.optim.Adam(params, lr=lr, capturable=True)
++
++    def step():
++        per = loss_fn(net.render(params, X, RES))
++        per.sum().backward()
++        with torch.no_grad():
++            norm = torch.sqrt(sum(p.grad.pow(2).sum(dim=(1, 2)) for p in params)) + 1e-12
++            for p in params:
++                p.grad /= norm[:, None, None]
++        opt.step()
++        return per.detach()
++
++    warmup = min(3, iters)
++    side = torch.cuda.Stream()
++    side.wait_stream(torch.cuda.current_stream())
++    with torch.cuda.stream(side):
++        for _ in range(warmup):
++            opt.zero_grad(set_to_none=True)
++            step()
++    torch.cuda.current_stream().wait_stream(side)
++    if iters <= warmup:
++        return
++    graph = torch.cuda.CUDAGraph()
++    opt.zero_grad(set_to_none=True)
++    with torch.cuda.graph(graph):
++        step()
++    for _ in range(iters - warmup - 1):
++        graph.replay()
++    del graph
++
++
++def replay_mask(allowed, fraction, seed):
++    if fraction <= 0:
++        return torch.zeros_like(allowed)
++    if fraction >= 1:
++        return allowed.clone()
++    u = torch.rand(allowed.shape, generator=torch.Generator().manual_seed(seed)).to(allowed.device)
++    u[~allowed] = 2.0
++    keep = torch.zeros_like(allowed).reshape(-1)
++    keep[u.reshape(-1).topk(round(fraction * allowed.sum().item()), largest=False).indices] = True
++    return keep.reshape(allowed.shape)
++
++
++def run(spec, assets, out):
++    task, fraction, steps = spec['task'], spec['replay_fraction'], spec['steps']
++    lr = LR[task] * spec['lr_scale']
++    net_pb, ws_pb = picbreeder(assets, task)
++    net, ws, seeds = fitted_dense(assets, task, net_pb, ws_pb)
++    X = coord_inputs(RES, DEV)
++    xx, yy = X[:, 0].reshape(RES, RES), X[:, 1].reshape(RES, RES)
++    dist = [torch.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) - RADIUS for cx, cy in DISCS]
++    discs = [d < 0 for d in dist]
++    never = torch.stack(dist).min(0)[0] > MARGIN
++    with torch.no_grad():
++        old = net_pb.render(ws_pb, X, RES)[0]
++    new = 1 - old
++    size = [((old - new) ** 2).mean(-1)[d].mean().item() for d in discs]
++    E0 = sum(size) / len(size)
++    K, O = len(seeds), len(ORDERS)
++    n = K * O
++    params = [W.repeat_interleave(O, 0).clone().requires_grad_() for W in ws]
++    with torch.no_grad():
++        start = net.render(params, X, RES)
++    R = np.zeros((n, 4, 4))
++    moved_never = np.zeros((n, 4))
++    first_outside = np.zeros(n)
++    t0 = time.time()
++    for phase in range(4):
++        T, Mn, Mr = [], [], []
++        for _ in range(K):
++            for o, order in enumerate(ORDERS):
++                current = order[phase]
++                t = old.clone()
++                for i in order[:phase + 1]:
++                    t[discs[i]] = new[discs[i]]
++                T.append(t)
++                Mn.append(discs[current])
++                Mr.append(replay_mask(~discs[current], fraction, 1009 * (o * 10 + phase) + sum(map(ord, task))))
++        T, Mn, Mr = torch.stack(T), torch.stack(Mn).float(), torch.stack(Mr).float()
++        has_replay = (Mr.sum((1, 2)) > 0).float()
++
++        def loss_fn(img):
++            err = ((img - T) ** 2).mean(-1)
++            return (err * Mn).sum((1, 2)) / Mn.sum((1, 2)) + has_replay * (err * Mr).sum((1, 2)) / Mr.sum((1, 2)).clamp(min=1)
++
++        fit(net, params, X, loss_fn, steps, lr)
++        with torch.no_grad():
++            img = net.render(params, X, RES)
++            change = ((img - start) ** 2).mean(-1)
++            for i, d in enumerate(discs):
++                R[:, phase, i] = (((img - new) ** 2).mean(-1)[:, d].mean(1) / size[i]).cpu().numpy()
++            moved_never[:, phase] = (change[:, never].mean(1) / E0).cpu().numpy()
++            if phase == 0:
++                for j in range(n):
++                    first_outside[j] = (change[j][~discs[ORDERS[j % O][0]]].mean() / E0).item()
++    rows = []
++    for k, seed in enumerate(seeds):
++        for o, order in enumerate(ORDERS):
++            j = k * O + o
++            for pos, disc in enumerate(order):
++                after = float(R[j, pos, disc])
++                final = float(R[j, 3, disc])
++                row = dict(task=task, group=f'replay{fraction:g}', replay_fraction=fraction, lr_scale=spec['lr_scale'],
++                           steps=steps, seed=seed, order=o, disc=disc, position=pos, R_after=round(after, 5),
++                           R_final=round(final, 5), learned=after <= LEARNED, background=round(float(moved_never[j, 3]), 5),
++                           forget=None, forget_best=None, forget_rel=None, first_outside=None)
++                if pos < 3:  # the last edit has nothing after it to forget it
++                    row['forget'] = round(final - after, 5)
++                    row['forget_best'] = round(final - float(R[j, pos:, disc].min()), 5)
++                    if after < 0.999:
++                        row['forget_rel'] = round((final - after) / (1 - after), 5)
++                if pos == 0:
++                    row['first_outside'] = round(float(first_outside[j]), 5)
++                rows.append(row)
++    os.makedirs(out, exist_ok=True)
++    with open(os.path.join(out, 'rows.jsonl'), 'w', encoding='utf-8') as f:
++        f.writelines(json.dumps(r) + '\n' for r in rows)
++    np.savez_compressed(os.path.join(out, 'curves.npz'), R=R, background=moved_never, seeds=np.array(seeds))
++    scored = [r for r in rows if r['forget'] is not None]
++    by_net = [statistics.median(r['forget'] for r in scored if r['seed'] == s) for s in seeds]
++    summary = dict(metric='forget', mean=statistics.median(r['forget'] for r in scored),
++                   std=statistics.pstdev(by_net) if len(by_net) > 1 else 0.0, n_seeds=K, seeds=seeds, n_rows=len(rows),
++                   n_learned=sum(r['learned'] for r in rows), R_after=statistics.median(r['R_after'] for r in rows),
++                   background=statistics.median(r['background'] for r in rows), secs=round(time.time() - t0, 1))
++    with open(os.path.join(out, 'summary.json'), 'w', encoding='utf-8') as f:
++        json.dump(summary, f, indent=1)
++    print(json.dumps(summary))
++
++
++if __name__ == '__main__':
++    p = argparse.ArgumentParser(description=__doc__)
++    p.add_argument('spec')
++    p.add_argument('--assets', required=True)
++    p.add_argument('--out', required=True)
++    a = p.parse_args()
++    with open(a.spec, encoding='utf-8') as fh:
++        run(json.load(fh), a.assets, a.out)
+diff --git a/src/aiq_kb/cppn_gpu/cppn_torch.py b/src/aiq_kb/cppn_gpu/cppn_torch.py
+new file mode 100755
+index 0000000..061caec
+--- /dev/null
++++ b/src/aiq_kb/cppn_gpu/cppn_torch.py
+@@ -0,0 +1,274 @@
++"""Picbreeder genomes -> NEAT graph -> layerized dense CPPN, all in PyTorch.
++
++Re-implements the conventions of the FER paper's code (github.com/akarshkumar0101/fer)
++without loading its pickles or running its code:
++  * inputs x (column axis), y (row axis), d = 1.4*sqrt(x^2+y^2), b = 1; no biases
++  * sigmoid(z) = 2*sigma(z)-1, gaussian(z) = 2*exp(-z^2)-1
++  * rgb = hsv2rgb((h+1) mod 1, clip(s,0,1), clip(|v|,0,1))
++  * layerization: longest-path layers, skip connections carried by identity ("cache") neurons,
++    each layer laid out as activation groups sorted by name.
++"""
++import zipfile
++import xml.etree.ElementTree as ET
++from collections import defaultdict
++
++import numpy as np
++import torch
++
++ACTS = {
++    'cache': lambda z: z,
++    'identity': lambda z: z,
++    'sin': torch.sin,
++    'cos': torch.cos,
++    'tanh': torch.tanh,
++    'sigmoid': lambda z: torch.sigmoid(z) * 2 - 1,
++    'gaussian': lambda z: torch.exp(-z ** 2) * 2 - 1,
++    'relu': torch.relu,
++}
++
++
++# ----------------------------------------------------------------------------- genome parsing
++def load_genome(zip_path):
++    with zipfile.ZipFile(zip_path) as z:
++        names = z.namelist()
++        assert len(names) == 1
++        root = ET.fromstring(z.read(names[0]).decode('utf-8'))
++    genome = root if root.tag == 'genome' else root.find('genome')
++    key = lambda e: f"{e.get('branch')}_{e.get('id')}"
++
++    nodes, links = [], []
++    for n in genome.find('nodes').findall('node'):
++        act = n.find('activation').text.strip()
++        nodes.append(dict(id=key(n.find('marking')), label=n.get('label', ''),
++                          act=act[:-3] if act.endswith('(x)') else act))
++    for l in genome.find('links').findall('link'):
++        links.append(dict(src=key(l.find('source')), dst=key(l.find('target')),
++                          w=float(l.find('weight').text)))
++
++    labels = {n['label']: n['id'] for n in nodes if n['label']}
++    if 'ink' in labels:  # grayscale genome: ink -> brightness, constant-zero hue/saturation
++        labels['brightness'] = labels.pop('ink')
++        for name in ['hue', 'saturation']:
++            nid = f'extra_{name}'
++            nodes.append(dict(id=nid, label=name, act='identity'))
++            links.append(dict(src=labels['brightness'], dst=nid, w=0.0))
++            labels[name] = nid
++    special = dict(x=labels['x'], y=labels['y'], d=labels['d'], b=labels['bias'],
++                   h=labels['hue'], s=labels['saturation'], v=labels['brightness'])
++    return dict(nodes=nodes, links=links, special=special)
++
++
++def coord_inputs(res, device='cpu'):
++    """(res*res, 4) inputs [x, y, d, b]; x varies along columns, y along rows (top = -1)."""
++    xs = torch.linspace(-1, 1, res, device=device)
++    Y, X = torch.meshgrid(xs, xs, indexing='ij')
++    D = torch.sqrt(X ** 2 + Y ** 2) * 1.4
++    return torch.stack([X, Y, D, torch.ones_like(X)], -1).reshape(-1, 4)
++
++
++def hsv2rgb(h, s, v):
++    h = torch.remainder(h + 1, 1.0) * 360.0
++    s, v = s.clamp(0, 1), v.abs().clamp(0, 1)
++    c = v * s
++    x = c * (1 - torch.abs(torch.remainder(h / 60, 2) - 1))
++    m = v - c
++    z = torch.zeros_like(h)
++    sectors = [(c, x, z), (x, c, z), (z, c, x), (z, x, c), (x, z, c), (c, z, x)]
++    r = g = b = 0
++    for k, (r_, g_, b_) in enumerate(sectors):
++        mask = ((h >= 60 * k) & (h < 60 * (k + 1))).to(h.dtype)
++        r, g, b = r + r_ * mask, g + g_ * mask, b + b_ * mask
++    return torch.stack([r + m, g + m, b + m], -1).clamp(0, 1)
++
++
++# ----------------------------------------------------------------------------- NEAT graph evaluation
++def neat_forward(g, res=256):
++    """Reference evaluation directly on the NEAT graph (recursive, like the paper's code)."""
++    act = {n['id']: n['act'] for n in g['nodes']}
++    ins = defaultdict(list)
++    for l in g['links']:
++        ins[l['dst']].append((l['src'], l['w']))
++    sp = g['special']
++    inp = coord_inputs(res).double()
++    val = {sp['x']: inp[:, 0], sp['y']: inp[:, 1], sp['d']: inp[:, 2], sp['b']: inp[:, 3]}
++
++    def get(n):
++        if n not in val:
++            z = torch.zeros(res * res, dtype=torch.float64)
++            for s, w in ins[n]:
++                z = z + w * get(s)
++            val[n] = ACTS[act[n]](z)
++        return val[n]
++
++    h, s, v = get(sp['h']), get(sp['s']), get(sp['v'])
++    return hsv2rgb(h, s, v).reshape(res, res, 3).float(), val
++
++
++# ----------------------------------------------------------------------------- layerization
++def layerize(g):
++    """Port the NEAT graph to a dense MLP computing exactly the same function.
++
++    Returns dict(groups=[(act, count), ...], n_hidden, width, weights=[W_1..W_L, W_out] (numpy),
++    slots=[per hidden layer: {slot: (node_id, novel)}]).
++    """
++    act = {n['id']: n['act'] for n in g['nodes']}
++    sp = g['special']
++    inputs = [sp['x'], sp['y'], sp['d'], sp['b']]
++    outputs = [sp['h'], sp['s'], sp['v']]
++    ins, outs = defaultdict(list), defaultdict(list)
++    for l in g['links']:
++        ins[l['dst']].append((l['src'], l['w']))
++        outs[l['src']].append(l['dst'])
++
++    reach, stack = set(inputs), list(outputs)
++    while stack:
++        n = stack.pop()
++        if n in reach:
++            continue
++        reach.add(n)
++        stack.extend(s for s, _ in ins[n])
++
++    layer = {n: 0 for n in inputs}
++
++    def get_layer(n):
++        if n not in layer:
++            layer[n] = 1 + max((get_layer(s) for s, _ in ins[n]), default=0)
++        return layer[n]
++
++    for n in reach:
++        get_layer(n)
++    n_layers = max(layer.values()) + 1  # including the input layer 0
++
++    contents = [[] for _ in range(n_layers)]
++    for n in sorted(reach, key=lambda n: (layer[n], n)):
++        start = layer[n]
++        if n in outputs:
++            end = n_layers
++        else:
++            targets = [layer[t] for t in outs[n] if t in reach]
++            end = max(targets) if targets else start + 1
++        for i in range(start, end):
++            contents[i].append((n, i == start and n not in inputs))
++    contents[0] = [(n, False) for n in inputs]
++
++    counts = defaultdict(int)
++    for lay in contents:
++        c = defaultdict(int)
++        for n, novel in lay:
++            c[act[n] if novel else 'cache'] += 1
++        for k, v in c.items():
++            counts[k] = max(counts[k], v)
++    groups = order_groups(counts.items())
++    width = sum(v for _, v in groups)
++    offset = dict(zip([k for k, _ in groups], np.cumsum([0] + [v for _, v in groups[:-1]])))
++
++    def positions(lay):
++        pos, used = {}, defaultdict(int)
++        for n, novel in lay:
++            a = act[n] if novel else 'cache'
++            pos[n] = offset[a] + used[a]
++            used[a] += 1
++        return pos
++
++    pos = [None] + [positions(lay) for lay in contents[1:]]
++    pos[0] = {n: i for i, n in enumerate(inputs)}
++
++    weights = []
++    for i in range(1, n_layers):
++        W = np.zeros((4 if i == 1 else width, width))
++        for n, novel in contents[i]:
++            if novel:
++                for s, w in ins[n]:
++                    W[pos[i - 1][s], pos[i][n]] += w
++            else:
++                W[pos[i - 1][n], pos[i][n]] = 1.0
++        weights.append(W)
++    W_out = np.zeros((width, 3))
++    for j, n in enumerate(outputs):
++        W_out[pos[-1][n], j] = 1.0
++    weights.append(W_out)
++
++    slots = [{pos[i][n]: (n, novel) for n, novel in contents[i]} for i in range(1, n_layers)]
++    return dict(groups=groups, n_hidden=n_layers - 1, width=width, weights=weights, slots=slots)
++
++
++LINEAR = ('cache', 'identity')
++
++
++def order_groups(groups):
++    """Linear groups first, then nonlinear ones by name; lets activate() touch only the nonlinear tail.
++    (A permutation of hidden units, so the computed function is unchanged.)"""
++    return sorted(groups, key=lambda g: (g[0] not in LINEAR, g[0]))
++
++
++def arch_string(L):
++    """Same format as the FER repo (groups sorted by name)."""
++    return f"{L['n_hidden']};" + ','.join(f'{a}:{c}' for a, c in sorted(L['groups']))
++
++
++# ----------------------------------------------------------------------------- dense CPPN (batched over parameter sets)
++class DenseCPPN:
++    """Dense CPPN with per-neuron activation groups. Weights are lists of (B, in, out) tensors,
++    so B parameter sets (seeds, perturbations) run in one batched forward pass."""
++
++    def __init__(self, groups, n_hidden):
++        self.groups, self.n_hidden = order_groups(groups), n_hidden
++        self.width = sum(c for _, c in self.groups)
++        self.n_linear = sum(c for a, c in self.groups if a in LINEAR)
++        self.shapes = [(4, self.width)] + [(self.width, self.width)] * (n_hidden - 1) + [(self.width, 3)]
++        self.sizes = [a * b for a, b in self.shapes]
++        self.n_params = sum(self.sizes)
++
++    def activate(self, z):
++        if self.n_linear == self.width:
++            return z
++        parts, i = [z[..., :self.n_linear]], self.n_linear
++        for a, c in self.groups:
++            if a not in LINEAR:
++                parts.append(ACTS[a](z[..., i:i + c]))
++                i += c
++        return torch.cat(parts, -1)
++
++    def forward(self, weights, inputs, return_features=False, chunks=64):
++        """weights: list of (B, in, out); inputs: (N, 4). Returns hsv (B, N, 3) [, features (B, N, w)].
++
++        Pixels are split into `chunks` groups so the backward weight-gradient (a reduction over all
++        pixels into a tiny w x w matrix) runs as many parallel matmuls instead of one starved one."""
++        B, N = weights[0].shape[0], inputs.shape[0]
++        C = chunks if N % chunks == 0 else 1
++        h = inputs.reshape(1, C, N // C, -1).expand(B, -1, -1, -1)
++        feats = [h]
++        for W in weights[:-1]:
++            h = self.activate(torch.matmul(h, W[:, None]))
++            if return_features:
++                feats.append(h)
++        out = torch.matmul(h, weights[-1][:, None]).reshape(B, N, 3)
++        if return_features:
++            return out, [f.reshape(B, N, -1) for f in feats]
++        return out
++
++    def render(self, weights, inputs, res):
++        hsv = self.forward(weights, inputs)
++        return hsv2rgb(hsv[..., 0], hsv[..., 1], hsv[..., 2]).reshape(-1, res, res, 3)
++
++    # flat-vector helpers (one parameter set per row)
++    def unflatten(self, flat):
++        flat = flat if flat.dim() == 2 else flat.unsqueeze(0)
++        out, i = [], 0
++        for (a, b), n in zip(self.shapes, self.sizes):
++            out.append(flat[:, i:i + n].reshape(-1, a, b))
++            i += n
++        return out
++
++    def flatten(self, weights):
++        return torch.cat([W.reshape(W.shape[0], -1) for W in weights], 1)
++
++    def lecun_init(self, n_sets, generator, device='cpu'):
++        """Truncated-normal LeCun init (matches flax's default nn.Dense kernel init)."""
++        ws = []
++        for a, b in self.shapes:
++            std = (1.0 / a) ** 0.5 / 0.87962566103423978
++            w = torch.empty(n_sets, a, b)
++            torch.nn.init.trunc_normal_(w, std=std, a=-2 * std, b=2 * std, generator=generator)
++            ws.append(w.to(device))
++        return ws
+diff --git a/src/aiq_kb/kb_checks.py b/src/aiq_kb/kb_checks.py
+index 18f400a..53890c0 100644
+--- a/src/aiq_kb/kb_checks.py
++++ b/src/aiq_kb/kb_checks.py
+@@ -18,9 +18,9 @@ by `where`, with the meaning kb/verify_kb.py gives these types in the CPPN/FER p
+   {"type": "ratio", "metric": "F", "where": {"task": "t"}, "group_a": "A", "group_b": "B", "min_n": 3,
+    "pass": {"op": "<=", "value": 0.5}, "fail": {"op": ">=", "value": 1.0}}
+ 
+-ratio is median A / median B. position is (median test - median low) / (median high - median low) over fitted rows.
++ratio is median A / median B, difference is median A - median B, median is one group's median. position is (median test - median low) / (median high - median low) over fitted rows.
+ count compares a row count to `value` once `where_total` selects at least `min_total` rows. Between pass and fail is BAND.
+-position and ratio cannot read the lab, because their groups are not held inside one set_id.
++position, ratio, difference and median cannot read the lab, because their groups are not held inside one set_id.
+ 
+ Keys are dotted paths into a row. A list value means any of, or that exact list when the field is itself a list.
+ """
+@@ -46,6 +46,8 @@ FIELDS = {  # required fields, optional fields, allowed sources (the first is th
+     "position": ({"metric", "where", "low_group", "high_group", "test_group", "pass", "fail"}, {"test_where", "min_n"},
+                  ("table",)),
+     "ratio": ({"metric", "where", "group_a", "group_b", "pass", "fail"}, {"min_n"}, ("table",)),
++    "difference": ({"metric", "where", "group_a", "group_b", "pass", "fail"}, {"min_n"}, ("table",)),
++    "median": ({"metric", "where", "group", "pass", "fail"}, {"min_n"}, ("table",)),
+ }
+ COMMON = {"type", "check_id", "label", "source"}
+ 
+@@ -96,10 +98,10 @@ def _invalid(c) -> str | None:
+         if not _is_count(c["min_total"]) or c["min_total"] < 1:
+             return "check min_total must be an integer of at least 1"
+         return _invalid_compare(c)
+-    names = ("low_group", "high_group", "test_group") if kind == "position" else ("group_a", "group_b")
++    names = {"position": ("low_group", "high_group", "test_group"), "median": ("group",)}.get(kind, ("group_a", "group_b"))
+     if any(not (isinstance(c[key], str) and c[key]) for key in (*names, "metric")):
+         return f"check {' and '.join(names)} and metric must be nonempty strings"
+-    if c[names[0]] == c[names[1]]:
++    if len(names) > 1 and c[names[0]] == c[names[1]]:
+         return f"check {names[0]} and {names[1]} must differ"
+     if "min_n" in c and (not _is_count(c["min_n"]) or c["min_n"] < 1):
+         return "check min_n must be an integer of at least 1"
+@@ -153,7 +155,7 @@ def normalize_checks(raw) -> tuple[list[dict], str | None]:
+         if c["type"] in ("win_rate", "loss_ratio"):
+             body.update(where=c.get("where", {}), pair_on=sorted(set(c.get("pair_on", []))),
+                         min_pairs=c.get("min_pairs", MIN_PAIRS), min_sets=c.get("min_sets", MIN_SETS))
+-        elif c["type"] in ("position", "ratio"):
++        elif c["type"] in ("position", "ratio", "difference", "median"):
+             body.setdefault("min_n", 2)
+         cid = "C" + hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:10]
+         label = c.get("label") or c.get("check_id")
+@@ -254,6 +256,17 @@ def run_check(check: dict, rows: list[dict]) -> tuple[str, str]:
+         if a is None or b is None or b <= 0:
+             return NODATA, f"{name}: not enough data ({check['group_a']}={a}, {check['group_b']}={b})"
+         return _banded(a / b, check, f"{name}: ratio={a / b:.3f} ({check['group_a']}={a:.4g}, {check['group_b']}={b:.4g})")
++    if kind == "difference":
++        a = _group_median(rows, {**check["where"], "group": check["group_a"]}, check["metric"], check["min_n"])
++        b = _group_median(rows, {**check["where"], "group": check["group_b"]}, check["metric"], check["min_n"])
++        if a is None or b is None:
++            return NODATA, f"{name}: not enough data ({check['group_a']}={a}, {check['group_b']}={b})"
++        return _banded(a - b, check, f"{name}: difference={a - b:.3f} ({check['group_a']}={a:.4g}, {check['group_b']}={b:.4g})")
++    if kind == "median":
++        value = _group_median(rows, {**check["where"], "group": check["group"]}, check["metric"], check["min_n"])
++        if value is None:
++            return NODATA, f"{name}: not enough data for {check['group']}"
++        return _banded(value, check, f"{name}: median={value:.3f} ({check['group']})")
+     found = pairs(check, rows)
+     if kind == "loss_ratio":  # a ratio of losses only means something when both are nonnegative and b is not zero
+         found = [p for p in found if p[0] >= 0 and p[1] > 0]
+diff --git a/src/aiq_kb/kb_cppn.py b/src/aiq_kb/kb_cppn.py
+new file mode 100755
+index 0000000..58f9e23
+--- /dev/null
++++ b/src/aiq_kb/kb_cppn.py
+@@ -0,0 +1,203 @@
++#!/usr/bin/env python3
++"""The cppn_continual lab family: fitted dense CPPNs learning local edits in sequence, under a replay budget.
++
++kb_lab.run_job sends a job here when its dataset is cppn_continual/<task>, so the run_experiment tool can vary
++loss.replay_fraction, optimizer.lr_scale and budget.training_steps like any other lab override. Training runs in
++cppn_gpu/continual_seq.py under AIQ_CPPN_PYTHON, which may be a Windows interpreter when this code runs in WSL. Lower `mean`
++is better, as in the rest of the lab. Assets live outside the repository in AIQ_CPPN_ASSETS: genomes/<task>.zip and
++nets/<batch>/sgd_<task>.pt.
++
++  python -m aiq_kb.kb_cppn run LAB_DIR         run the registered replay budgets on every task through kb_lab.run_job
++  python -m aiq_kb.kb_cppn lab LAB_DIR         write lab_db.jsonl, allowed_datasets.txt and the check table from saved results
++  python -m aiq_kb.kb_cppn settle SEED TABLE   replay a seed KB's checks on a check table, without changing either
++"""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++
++if __package__:
++    from .kb_checks import load_rows, normalize_checks, run_check, verdict
++else:
++    from kb_checks import load_rows, normalize_checks, run_check, verdict
++
++FAMILY = "cppn_continual"
++TASKS = ("skull", "butterfly", "apple")
++REPLAY_FRACTIONS = (0.0, 0.05, 0.2, 1.0)
++MAX_STEPS = 5000
++RUNNER = Path(__file__).resolve().parent / "cppn_gpu" / "continual_seq.py"
++RESOLUTION_PIXELS = 4096
++
++
++def _native(path: Path, python: str) -> str:
++    """A path this interpreter can open: Windows interpreters started from WSL need a Windows path."""
++    if python.lower().endswith(".exe") and shutil.which("wslpath"):
++        return subprocess.check_output(["wslpath", "-w", str(path)], text=True).strip()
++    return str(path)
++
++
++def validate(candidate: dict) -> dict:
++    """Returns the runner spec for a candidate, or raises ValueError."""
++    if set(candidate) - {"model", "optimizer", "loss", "budget"}:
++        raise ValueError("unsupported candidate control")
++    model, optimizer, loss, budget = (candidate.get(k) or {} for k in ("model", "optimizer", "loss", "budget"))
++    if model.get("type") != "cppn_dense" or model.get("group") != "G0":
++        raise ValueError("model must be the fitted dense group: type cppn_dense, group G0")
++    if optimizer.get("type") != "Adam":
++        raise ValueError("optimizer.type must be Adam")
++    if loss.get("loss_id") != "mse_balanced":
++        raise ValueError("loss.loss_id must be mse_balanced")
++    fraction, scale, steps = loss.get("replay_fraction"), optimizer.get("lr_scale"), budget.get("training_steps")
++    if isinstance(fraction, bool) or not isinstance(fraction, (int, float)) or not 0 <= fraction <= 1:
++        raise ValueError("loss.replay_fraction must be between 0 and 1")
++    if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not 0 < scale <= 10:
++        raise ValueError("optimizer.lr_scale must be above 0 and at most 10")
++    if isinstance(steps, bool) or not isinstance(steps, int) or not 1 <= steps <= MAX_STEPS:
++        raise ValueError(f"budget.training_steps must be an integer from 1 to {MAX_STEPS}")
++    return {"replay_fraction": float(fraction), "lr_scale": float(scale), "steps": steps}
++
++
++def candidate(fraction: float, lr_scale: float = 1.0, steps: int = 500) -> dict:
++    return {"model": {"type": "cppn_dense", "group": "G0"}, "optimizer": {"type": "Adam", "lr_scale": lr_scale},
++            "loss": {"loss_id": "mse_balanced", "replay_fraction": fraction},
++            "budget": {"training_steps": steps, "batch_size": RESOLUTION_PIXELS}}
++
++
++def _evidence(path: Path) -> dict:
++    content = path.read_bytes()
++    return {"path": str(path), "sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content)}
++
++
++def run_candidate(task: str, cand: dict, lab: Path) -> dict:
++    spec = {"task": task, **validate(cand)}
++    script = Path(os.environ.get("AIQ_CPPN_RUNNER", RUNNER))
++    key = hashlib.sha1(json.dumps({"runner": script.read_bytes().hex(), **spec}, sort_keys=True).encode()).hexdigest()[:10]
++    directory = lab / "experiments" / FAMILY / task / f"x_{key}"
++    results = directory / "results"
++    summary = results / "summary.json"
++    cached = summary.exists()
++    if not cached:
++        directory.mkdir(parents=True, exist_ok=True)
++        (directory / "candidate_spec.json").write_text(json.dumps({**spec, "candidate": cand}, indent=2))
++        runner_spec = directory / "runner_spec.json"
++        runner_spec.write_text(json.dumps(spec))
++        python = os.environ.get("AIQ_CPPN_PYTHON", sys.executable)
++        assets = Path(os.environ.get("AIQ_CPPN_ASSETS", lab / "cppn_assets"))
++        done = subprocess.run([python, _native(script, python), _native(runner_spec, python),
++                               "--assets", _native(assets, python), "--out", _native(results, python)],
++                              stdin=subprocess.DEVNULL, capture_output=True, text=True)
++        if done.returncode != 0:
++            raise RuntimeError(done.stderr[-600:])
++    data = json.loads(summary.read_text())
++    return {"cached": cached, "mean": data["mean"], "std": data.get("std"), "n_seeds": data.get("n_seeds"),
++            "failed_seeds": [], "excluded": [], "summary": data,
++            "measurement_files": {"candidate_spec.json": _evidence(directory / "candidate_spec.json"),
++                                  "results/summary.json": _evidence(summary)}}
++
++
++def run_lab_job(job: dict, lab: Path) -> dict:
++    """The kb_lab.run_job contract for this family; a failed candidate reports its error, as the other families do."""
++    family, _, task = str(job["dataset"]).partition("/")
++    if family != FAMILY or task not in TASKS:
++        raise ValueError(f"unknown dataset {job['dataset']}")
++    if {"process", "target_transform", "diagnostic_fail_threshold"} & set(job):
++        raise ValueError("unsupported process job control")
++    allowlist = lab / "allowed_datasets.txt"
++    if allowlist.exists() and job["dataset"] not in allowlist.read_text().split():
++        raise ValueError(f"dataset {job['dataset']} is not in the lab (held out or unmeasured)")
++    out = []
++    for cand in job["candidates"]:
++        try:
++            result = run_candidate(task, cand, lab)
++        except (RuntimeError, ValueError) as exc:
++            result = {"cached": False, "mean": None, "measurement_files": {}, "error": f"{type(exc).__name__}: {exc}"[:400]}
++        out.append({**result, "candidate": cand})
++    return {"dataset": job["dataset"], "family": FAMILY, "results": out}
++
++
++def saved_runs(lab: Path) -> list[tuple[str, dict, Path]]:
++    found = []
++    for spec_path in sorted((lab / "experiments" / FAMILY).glob("*/x_*/candidate_spec.json")):
++        spec = json.loads(spec_path.read_text())
++        if (spec_path.parent / "results/summary.json").exists():
++            found.append((spec["task"], spec["candidate"], spec_path.parent / "results"))
++    return found
++
++
++def write_lab(lab: Path) -> None:
++    """lab_db.jsonl rows in the shape load_lab() and experiments expect, one set per task and budget, and the check table."""
++    rows, table = [], []
++    runs = saved_runs(lab)
++    for task, cand, results in runs:
++        data = json.loads((results / "summary.json").read_text())
++        steps = cand["budget"]["training_steps"]
++        size = cand["budget"]["batch_size"]
++        rows.append({"family": FAMILY, "dataset_id": task, "set_id": f"{task}/steps{steps}",
++                     "candidate_id": results.parent.name, "dataset": {"task": task}, "params": None,
++                     "budget": {"training_steps": steps, "batch_size": size, "total_samples_seen": steps * size},
++                     "model_type": cand["model"]["type"], "model": cand["model"], "optimizer": cand["optimizer"],
++                     "loss": cand["loss"], "metric": "forget", "mean": data["mean"], "std": data.get("std"),
++                     "n_seeds": data.get("n_seeds"), "source": "cppn_continual"})
++        table.append((results / "rows.jsonl").read_text())
++    (lab / "lab_db.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
++    (lab / "cppn_continual_db.jsonl").write_text("".join(table))
++    (lab / "allowed_datasets.txt").write_text("\n".join(sorted({f"{FAMILY}/{t}" for t, _, _ in runs})) + "\n")
++
++
++def settle(seed: Path, table: Path) -> dict:
++    """Verdict per seed claim. Read-only: kb-loop keeps no claim status, so the result is reported, not stored."""
++    rows, fingerprint = load_rows([table])
++    report = {"table_sha256": fingerprint, "rows": len(rows), "claims": []}
++    for claim in json.loads(seed.read_text())["claims"]:
++        checks, error = normalize_checks(claim.get("checks"))
++        if error:
++            raise ValueError(f"{claim['id']}: {error}")
++        results = [run_check(check, rows) for check in checks]
++        report["claims"].append({"id": claim["id"], "verdict": verdict(results), "text": claim["text"],
++                                 "checks": [{"state": s, "message": m} for s, m in results]})
++    return report
++
++
++def run_registered(lab: Path) -> None:
++    """Goes through kb_lab.run_job, the entry the run_experiment tool uses. A saved candidate is not rerun."""
++    if __package__:
++        from .kb_lab import run_job
++    else:
++        from kb_lab import run_job
++    failed = False
++    for task in TASKS:
++        job = {"dataset": f"{FAMILY}/{task}", "candidates": [candidate(f) for f in REPLAY_FRACTIONS]}
++        for result in run_job(job, lab_dir=lab)["results"]:
++            label = f"{task} replay {result['candidate']['loss']['replay_fraction']:g}"
++            failed = failed or result["mean"] is None
++            print(label, result.get("error") or json.dumps(result["summary"]), flush=True)
++    if failed:
++        raise SystemExit(1)
++    write_lab(lab)
++
++
++def main() -> None:
++    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
++    sub = p.add_subparsers(dest="cmd", required=True)
++    sub.add_parser("run").add_argument("lab_dir")
++    sub.add_parser("lab").add_argument("lab_dir")
++    s = sub.add_parser("settle")
++    s.add_argument("seed")
++    s.add_argument("table")
++    a = p.parse_args()
++    if a.cmd == "run":
++        run_registered(Path(a.lab_dir))
++    elif a.cmd == "lab":
++        write_lab(Path(a.lab_dir))
++    else:
++        print(json.dumps(settle(Path(a.seed), Path(a.table)), ensure_ascii=False, indent=1))
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/aiq_kb/kb_lab.py b/src/aiq_kb/kb_lab.py
+index 9d51b8d..1404416 100644
+--- a/src/aiq_kb/kb_lab.py
++++ b/src/aiq_kb/kb_lab.py
+@@ -27,8 +27,10 @@ from pathlib import Path
+ 
+ if __package__:
+     from .config import KBConfig
++    from .kb_cppn import FAMILY as CPPN_FAMILY, run_lab_job as run_cppn_job
+ else:
+     from config import KBConfig
++    from kb_cppn import FAMILY as CPPN_FAMILY, run_lab_job as run_cppn_job
+ 
+ CONFIG = KBConfig.from_env()
+ ROOT = CONFIG.bench_root.parent
+@@ -370,6 +372,8 @@ def run_job(job: dict, workers: int = 12, max_candidates: int = 16, timeout: int
+     "loss": {...}, "budget": {"training_steps": T, "batch_size": B}}, ...]}.
+     Optional capture_executable_sources=true pins future execution source; existing caches need a verified manifest.
+     Returns summaries and saved seed/file evidence."""
++    if str(job.get("dataset", "")).partition("/")[0] == CPPN_FAMILY:
++        return run_cppn_job(job, Path(lab_dir or LAB))
+     capture_sources = job.get("capture_executable_sources", False)
+     if not isinstance(capture_sources, bool):
+         raise ValueError("capture_executable_sources must be boolean")
+diff --git a/tests/test_kb_cppn.py b/tests/test_kb_cppn.py
+new file mode 100755
+index 0000000..e3c3286
+--- /dev/null
++++ b/tests/test_kb_cppn.py
+@@ -0,0 +1,141 @@
++"""The cppn_continual lab family: a fake runner stands in for the GPU process, so these run anywhere."""
++import json
++import os
++from pathlib import Path
++import sys
++import tempfile
++import threading
++from types import SimpleNamespace
++import unittest
++from unittest.mock import patch
++
++from aiq_kb import kb_cppn, kb_lab, kb_science_loop as loop
++from aiq_kb.kb_checks import BAND, FAIL, NODATA, PASS, normalize_checks, run_check
++
++FAKE_RUNNER = """
++import argparse, json, os
++p = argparse.ArgumentParser(); p.add_argument('spec'); p.add_argument('--assets'); p.add_argument('--out')
++a = p.parse_args()
++spec = json.load(open(a.spec))
++os.makedirs(a.out, exist_ok=True)
++f = spec['replay_fraction']
++if f == 0.77:
++    raise SystemExit('runner failure')
++open(os.path.join(a.out, 'rows.jsonl'), 'w').write(json.dumps({'task': spec['task'], 'group': f'replay{f:g}', 'forget': 0.6 - f}) + '\\n')
++json.dump({'metric': 'forget', 'mean': 0.6 - f, 'std': 0.01, 'n_seeds': 3}, open(os.path.join(a.out, 'summary.json'), 'w'))
++"""
++
++
++def rows(group, *values):
++    return [{"task": "t", "group": group, "m": v} for v in values]
++
++
++class CheckTypes(unittest.TestCase):
++    def test_difference_bands_and_missing_data(self):
++        raw = {"type": "difference", "metric": "m", "where": {"task": "t"}, "group_a": "a", "group_b": "b",
++               "pass": {"op": ">=", "value": 0.2}, "fail": {"op": "<=", "value": 0.05}}
++        check = normalize_checks([raw])[0][0]
++        for value, want in [(0.5, PASS), (0.1, BAND), (0.0, FAIL)]:
++            self.assertEqual(run_check(check, rows("a", value, value) + rows("b", 0.0, 0.0))[0], want)
++        self.assertEqual(run_check(check, rows("a", 0.5))[0], NODATA)
++
++    def test_median_bands_and_missing_data(self):
++        raw = {"type": "median", "metric": "m", "where": {"task": "t"}, "group": "a",
++               "pass": {"op": ">=", "value": 0.3}, "fail": {"op": "<=", "value": 0.05}}
++        check = normalize_checks([raw])[0][0]
++        for value, want in [(0.4, PASS), (0.2, BAND), (0.01, FAIL)]:
++            self.assertEqual(run_check(check, rows("a", value, value))[0], want)
++        self.assertEqual(run_check(check, rows("a", 0.4))[0], NODATA)
++
++    def test_table_only_and_validated(self):
++        base = {"type": "median", "metric": "m", "where": {}, "group": "a", "pass": {"op": ">=", "value": 1},
++                "fail": {"op": "<=", "value": 0}}
++        self.assertIsNone(normalize_checks([base])[1])
++        self.assertIsNotNone(normalize_checks([{**base, "source": "lab"}])[1])
++        self.assertIsNotNone(normalize_checks([{k: v for k, v in base.items() if k != "group"}])[1])
++        same = {"type": "difference", "metric": "m", "where": {}, "group_a": "a", "group_b": "a",
++                "pass": {"op": ">=", "value": 1}, "fail": {"op": "<=", "value": 0}}
++        self.assertIsNotNone(normalize_checks([same])[1])
++
++
++class Lab(unittest.TestCase):
++    def setUp(self):
++        self.dir = tempfile.TemporaryDirectory()
++        self.addCleanup(self.dir.cleanup)
++        self.lab = Path(self.dir.name) / "lab"
++        self.lab.mkdir()
++        runner = Path(self.dir.name) / "fake_runner.py"
++        runner.write_text(FAKE_RUNNER)
++        env = patch.dict(os.environ, {"AIQ_CPPN_PYTHON": sys.executable, "AIQ_CPPN_RUNNER": str(runner),
++                                      "AIQ_CPPN_ASSETS": str(self.lab)})
++        env.start()
++        self.addCleanup(env.stop)
++
++    def job(self, *fractions, task="skull"):
++        return {"dataset": f"{kb_cppn.FAMILY}/{task}", "candidates": [kb_cppn.candidate(f) for f in fractions]}
++
++    def test_run_job_dispatches_family_and_caches(self):
++        first = kb_lab.run_job(self.job(0.0, 0.2), lab_dir=self.lab)
++        self.assertEqual(first["family"], kb_cppn.FAMILY)
++        self.assertEqual([round(r["mean"], 3) for r in first["results"]], [0.6, 0.4])
++        self.assertEqual({r["candidate"]["loss"]["replay_fraction"] for r in first["results"]}, {0.0, 0.2})
++        self.assertFalse(first["results"][0]["cached"])
++        self.assertTrue(kb_lab.run_job(self.job(0.0), lab_dir=self.lab)["results"][0]["cached"])
++
++    def test_failed_and_invalid_candidates_report_errors_without_a_mean(self):
++        bad = kb_cppn.candidate(0.0)
++        bad["loss"]["replay_fraction"] = 2
++        job = self.job(0.77)
++        job["candidates"].append(bad)
++        results = kb_lab.run_job(job, lab_dir=self.lab)["results"]
++        self.assertTrue(all(r["mean"] is None and r["error"] for r in results))
++
++    def test_unknown_task_and_allowlist_are_refused(self):
++        with self.assertRaises(ValueError):
++            kb_lab.run_job(self.job(0.0, task="nope"), lab_dir=self.lab)
++        (self.lab / "allowed_datasets.txt").write_text(f"{kb_cppn.FAMILY}/apple\n")
++        with self.assertRaises(ValueError):
++            kb_lab.run_job(self.job(0.0), lab_dir=self.lab)
++
++    def test_lab_rows_and_table_from_saved_results(self):
++        kb_lab.run_job(self.job(0.0, 0.2), lab_dir=self.lab)
++        kb_cppn.write_lab(self.lab)
++        lab_rows = [json.loads(x) for x in (self.lab / "lab_db.jsonl").read_text().splitlines()]
++        self.assertEqual(len(lab_rows), 2)
++        self.assertEqual({r["set_id"] for r in lab_rows}, {"skull/steps500"})
++        self.assertEqual(lab_rows[0]["metric"], "forget")
++        self.assertEqual(len((self.lab / "cppn_continual_db.jsonl").read_text().splitlines()), 2)
++        self.assertIn(f"{kb_cppn.FAMILY}/skull", (self.lab / "allowed_datasets.txt").read_text())
++
++    def test_run_experiment_tool_varies_replay_through_the_real_lab_cli(self):
++        kb_lab.run_job(self.job(0.0), lab_dir=self.lab)
++        kb_cppn.write_lab(self.lab)
++        base = json.loads((self.lab / "lab_db.jsonl").read_text().splitlines()[0])
++        run = Path(self.dir.name) / "runs" / "r"
++        (run / "lab_jobs").mkdir(parents=True)
++        host = SimpleNamespace(lab_row=lambda ref: base, worker_job=None, run=run, lab_sem=threading.Semaphore(1),
++                               lock=threading.Lock(), cur_epoch=1, lab_dataset_params=lambda ds: {},
++                               args=SimpleNamespace(research_max_cands=4, lab=str(self.lab / "lab_db.jsonl"), lab_workers=1,
++                                                    pool=str(self.lab / "absent.jsonl")))
++        reply = json.loads(loop.Loop.experiment(host, {"base": "b", "variants": [{"loss.replay_fraction": 0.05},
++                                                                                {"loss.replay_fraction": 0.2}]}, []))
++        self.assertEqual(reply["metric"], "forget")
++        self.assertEqual([round(r["mean"], 3) for r in reply["results"]], [0.55, 0.4])
++        added = [json.loads(x) for x in (run / "lab_experiments.jsonl").read_text().splitlines()]
++        self.assertEqual([r["loss"]["replay_fraction"] for r in added], [0.05, 0.2])
++
++
++class Seed(unittest.TestCase):
++    def test_registered_claims_load_as_a_kb_seed_and_settle_without_data(self):
++        seed = Path(__file__).resolve().parents[1] / "research/cppn_continual_20261101/seed_kb.json"
++        with tempfile.TemporaryDirectory() as d:
++            kb = loop.KB.seed(Path(d), seed)
++            self.assertTrue(kb.claims)
++            self.assertTrue(all(c.get("checks") for c in kb.claims.values()))
++            report = kb_cppn.settle(seed, Path(d) / "absent.jsonl")
++        self.assertTrue(report["claims"])
++        self.assertEqual({c["verdict"] for c in report["claims"]}, {"INCONCLUSIVE"})
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.43.0
+

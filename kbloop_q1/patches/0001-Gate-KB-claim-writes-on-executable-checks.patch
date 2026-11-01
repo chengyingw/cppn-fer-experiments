@@ -1,0 +1,1627 @@
+From 3e4a80b3adb670945992cad9997541b867a48c70 Mon Sep 17 00:00:00 2001
+From: chengyingw <1424556745@qq.com>
+Date: Sun, 1 Nov 2026 15:28:50 +0800
+Subject: [PATCH 1/2] Gate KB claim writes on executable checks
+
+Claims may carry checks replayed on stored measurements whenever they are
+written. Merge and revise inherit every ancestor check and are written only if
+all pass; a failing check rejects an add; too little data or a mixed result is
+never a falsification. Delete in propose_changes now needs evidence, and a
+counterexample must be a solve that cited this claim version and lost credit.
+
+Checks read --lab, comparing only inside one set_id, or --check-table result
+tables with count, position and ratio. Claims without checks behave as before.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/aiq_kb/kb_checks.py       | 290 ++++++++++++
+ src/aiq_kb/kb_science_loop.py | 238 ++++++++--
+ tests/test_kb_checks.py       | 846 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 1347 insertions(+), 27 deletions(-)
+ create mode 100644 src/aiq_kb/kb_checks.py
+ create mode 100644 tests/test_kb_checks.py
+
+diff --git a/src/aiq_kb/kb_checks.py b/src/aiq_kb/kb_checks.py
+new file mode 100644
+index 0000000..18f400a
+--- /dev/null
++++ b/src/aiq_kb/kb_checks.py
+@@ -0,0 +1,290 @@
++"""Executable claim checks, replayed on stored measurements. Too little data is NODATA, never a falsification.
++
++Two sources, chosen by a check's `source`:
++
++lab (--lab plus this run's experiments; the default for win_rate and loss_ratio). Compares arms a and b by each row's
++`mean` (10-seed mean of the selection metric; lower is better), and a comparison never leaves one set_id:
++
++  {"type": "win_rate", "where": {"family": "f"}, "a": {"optimizer.type": "Adam"}, "b": {"optimizer.type": "SGD"},
++   "pair_on": ["depth", "width"], "op": ">=", "value": 0.7, "min_pairs": 8, "min_sets": 4}
++
++One pair is one set_id + pair_on cell holding both arms, with each arm averaged inside the cell. win_rate is the share
++of pairs a wins (ties count one half); loss_ratio is the median of a/b, so loss_ratio <= 0.9 reads "a has at least 10%
++lower loss". Rows that failed seeds or were excluded are not measurements.
++
++table (--check-table, repeatable and concatenated; the default for count, position and ratio). One row per run, selected
++by `where`, with the meaning kb/verify_kb.py gives these types in the CPPN/FER project:
++
++  {"type": "ratio", "metric": "F", "where": {"task": "t"}, "group_a": "A", "group_b": "B", "min_n": 3,
++   "pass": {"op": "<=", "value": 0.5}, "fail": {"op": ">=", "value": 1.0}}
++
++ratio is median A / median B. position is (median test - median low) / (median high - median low) over fitted rows.
++count compares a row count to `value` once `where_total` selects at least `min_total` rows. Between pass and fail is BAND.
++position and ratio cannot read the lab, because their groups are not held inside one set_id.
++
++Keys are dotted paths into a row. A list value means any of, or that exact list when the field is itself a list.
++"""
++from __future__ import annotations
++
++import collections
++import functools
++import hashlib
++import json
++import math
++import operator
++import statistics
++from pathlib import Path
++
++OPS = {">=": operator.ge, "<=": operator.le, ">": operator.gt, "<": operator.lt}
++PASS, FAIL, BAND, NODATA = "PASS", "FAIL", "BAND", "NODATA"
++MIN_PAIRS, MIN_SETS = 5, 3
++_PAIRED = ({"a", "b", "op", "value"}, {"where", "pair_on", "min_pairs", "min_sets"}, ("lab", "table"))
++FIELDS = {  # required fields, optional fields, allowed sources (the first is the default)
++    "win_rate": _PAIRED,
++    "loss_ratio": _PAIRED,
++    "count": ({"where", "where_total", "min_total", "op", "value"}, set(), ("table", "lab")),
++    "position": ({"metric", "where", "low_group", "high_group", "test_group", "pass", "fail"}, {"test_where", "min_n"},
++                 ("table",)),
++    "ratio": ({"metric", "where", "group_a", "group_b", "pass", "fail"}, {"min_n"}, ("table",)),
++}
++COMMON = {"type", "check_id", "label", "source"}
++
++
++def _is_count(x) -> bool:
++    return isinstance(x, int) and not isinstance(x, bool)
++
++
++def _is_number(x) -> bool:
++    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
++
++
++def _selector(x) -> bool:
++    return isinstance(x, dict) and all(isinstance(k, str) and k for k in x)
++
++
++def _threshold(x) -> bool:
++    return isinstance(x, dict) and set(x) == {"op", "value"} and x["op"] in OPS and _is_number(x["value"])
++
++
++def _invalid_band(c: dict) -> str | None:
++    good, bad = c["pass"], c["fail"]
++    if not (_threshold(good) and _threshold(bad)):
++        return f"check pass and fail must each be {{op, value}} with op in {list(OPS)}"
++    if good["op"][0] == bad["op"][0] or (good["value"] > bad["value"] if good["op"][0] == "<" else good["value"] < bad["value"]):
++        return "check pass and fail must point away from each other, so both can be reached"
++    return None
++
++
++def _invalid(c) -> str | None:
++    if not isinstance(c, dict) or c.get("type") not in FIELDS:
++        return f"check type must be one of {list(FIELDS)}"
++    kind, (required, optional, sources) = c["type"], FIELDS[c["type"]]
++    if set(c) - required - optional - COMMON:
++        return f"{kind} check has unknown fields {sorted(set(c) - required - optional - COMMON)}"
++    if required - set(c):
++        return f"{kind} check is missing fields {sorted(required - set(c))}"
++    if any(key in c and not (isinstance(c[key], str) and c[key]) for key in ("check_id", "label")):
++        return "check check_id and label must be nonempty strings"
++    if c.get("source", sources[0]) not in sources:
++        return f"{kind} check source must be one of {list(sources)}"
++    for key in ("where", "where_total", "test_where"):
++        if key in c and not _selector(c[key]):
++            return f"check {key} must be an object"
++    if kind in ("win_rate", "loss_ratio"):
++        return _invalid_paired(c)
++    if kind == "count":
++        if not _is_count(c["min_total"]) or c["min_total"] < 1:
++            return "check min_total must be an integer of at least 1"
++        return _invalid_compare(c)
++    names = ("low_group", "high_group", "test_group") if kind == "position" else ("group_a", "group_b")
++    if any(not (isinstance(c[key], str) and c[key]) for key in (*names, "metric")):
++        return f"check {' and '.join(names)} and metric must be nonempty strings"
++    if c[names[0]] == c[names[1]]:
++        return f"check {names[0]} and {names[1]} must differ"
++    if "min_n" in c and (not _is_count(c["min_n"]) or c["min_n"] < 1):
++        return "check min_n must be an integer of at least 1"
++    return _invalid_band(c)
++
++
++def _invalid_compare(c: dict) -> str | None:
++    if c["op"] not in OPS:
++        return f"check op must be one of {list(OPS)}"
++    if not _is_number(c["value"]):
++        return "check value must be a finite number"
++    return None
++
++
++def _invalid_paired(c: dict) -> str | None:
++    a, b = c["a"], c["b"]
++    if not (_selector(a) and _selector(b) and any(k in b and a[k] != b[k] for k in a)):
++        return "check arms a and b must share a key with different values, so no row falls in both"
++    pair_on = c.get("pair_on", [])
++    if not isinstance(pair_on, list) or any(not isinstance(k, str) or not k for k in pair_on):
++        return "check pair_on must be a list of field names"
++    if set(pair_on) & (set(a) | set(b)):
++        return "check pair_on cannot hold a field that defines an arm"
++    error = _invalid_compare(c)
++    if error:
++        return error
++    if c["type"] == "win_rate" and not 0 < c["value"] < 1:
++        return "win_rate value must lie strictly between 0 and 1"
++    if c["type"] == "loss_ratio" and c["value"] <= 0:
++        return "loss_ratio value must be positive"
++    for key, floor in (("min_pairs", MIN_PAIRS), ("min_sets", MIN_SETS)):
++        if not _is_count(c.get(key, floor)) or c.get(key, floor) < floor:
++            return f"check {key} must be an integer of at least {floor}"
++    return None
++
++
++def normalize_checks(raw) -> tuple[list[dict], str | None]:
++    """Validate submitted checks. IDs are content hashes, so nobody can replace an ancestor's check by reusing its name;
++    a submitted check_id survives only as a label, to trace the check back to where it was registered."""
++    if raw is None:
++        return [], None
++    if not isinstance(raw, list):
++        return [], "checks must be a list of objects"
++    out = []
++    for c in raw:
++        error = _invalid(c)
++        if error:
++            return [], error
++        body = {k: v for k, v in c.items() if k not in ("check_id", "label")}
++        body.setdefault("source", FIELDS[c["type"]][2][0])
++        if c["type"] in ("win_rate", "loss_ratio"):
++            body.update(where=c.get("where", {}), pair_on=sorted(set(c.get("pair_on", []))),
++                        min_pairs=c.get("min_pairs", MIN_PAIRS), min_sets=c.get("min_sets", MIN_SETS))
++        elif c["type"] in ("position", "ratio"):
++            body.setdefault("min_n", 2)
++        cid = "C" + hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()[:10]
++        label = c.get("label") or c.get("check_id")
++        out.append({"check_id": cid, **({"label": label} if label and label != cid else {}), **body})
++    return merge_checks(out), None
++
++
++def merge_checks(*groups: list[dict]) -> list[dict]:
++    """Union by content. The first occurrence keeps its label, so a descendant cannot rename an ancestor's check."""
++    out = {}
++    for group in groups:
++        for c in group:
++            out.setdefault(c["check_id"], c)
++    return list(out.values())
++
++
++def check_name(check: dict) -> str:
++    return check.get("label") or check["check_id"]
++
++
++def lookup(row: dict, key: str):
++    value = row
++    for part in key.split("."):
++        value = value.get(part) if isinstance(value, dict) else None
++    return value
++
++
++def matches(row: dict, where: dict) -> bool:
++    for key, wanted in where.items():
++        value = lookup(row, key)
++        if value != wanted and not (isinstance(wanted, list) and value in wanted):
++            return False
++    return True
++
++
++def _measured(row: dict) -> bool:
++    return (bool(row.get("set_id")) and _is_number(row.get("mean"))
++            and not row.get("excluded") and not row.get("failed_seeds"))
++
++
++def pairs(check: dict, rows: list[dict]) -> list[tuple[float, float, str]]:
++    """(a mean, b mean, set_id) for every set_id + pair_on cell where both arms were measured on one metric."""
++    cells = collections.defaultdict(lambda: ([], []))
++    for row in rows:
++        if not _measured(row) or not matches(row, check["where"]):
++            continue
++        cell = [lookup(row, k) for k in check["pair_on"]]
++        if None in cell:
++            continue
++        for side, arm in enumerate((check["a"], check["b"])):
++            if matches(row, arm):
++                cells[row["set_id"], json.dumps(cell, sort_keys=True)][side].append(row)
++    out = []
++    for (set_id, _), (left, right) in sorted(cells.items()):
++        if left and right and len({r.get("metric") for r in left + right}) == 1:
++            out.append((statistics.fmean(r["mean"] for r in left), statistics.fmean(r["mean"] for r in right), set_id))
++    return out
++
++
++def _group_median(rows: list[dict], where: dict, metric: str, min_n: int = 1) -> float | None:
++    values = [lookup(r, metric) for r in rows if matches(r, where)]
++    values = [v for v in values if _is_number(v)]
++    return statistics.median(values) if len(values) >= min_n else None
++
++
++def _banded(stat: float, check: dict, message: str) -> tuple[str, str]:
++    if OPS[check["pass"]["op"]](stat, check["pass"]["value"]):
++        return PASS, message
++    if OPS[check["fail"]["op"]](stat, check["fail"]["value"]):
++        return FAIL, message
++    return BAND, message
++
++
++def run_check(check: dict, rows: list[dict]) -> tuple[str, str]:
++    """Returns (PASS | FAIL | BAND | NODATA, message). rows must come from the check's source."""
++    name, kind = check_name(check), check["type"]
++    if kind == "count":
++        if sum(matches(r, check["where_total"]) for r in rows) < check["min_total"]:
++            return NODATA, f"{name}: fewer than {check['min_total']} runs"
++        n = sum(matches(r, check["where"]) for r in rows)
++        ok = OPS[check["op"]](n, check["value"])
++        return (PASS if ok else FAIL), f"{name}: count={n}, need {check['op']} {check['value']}"
++    if kind == "position":  # r = 0 means the test group sits at the low group's value, r = 1 at the high group's
++        where, metric = {**check["where"], "fit": True}, check["metric"]
++        low = _group_median(rows, {**where, "group": check["low_group"]}, metric)
++        high = _group_median(rows, {**where, "group": check["high_group"]}, metric)
++        test = _group_median(rows, {**where, "group": check["test_group"], **check.get("test_where", {})}, metric, check["min_n"])
++        if low is None or high is None or test is None:
++            return NODATA, f"{name}: not enough fitted runs for {check['test_group']} (low={low}, high={high}, test={test})"
++        if abs(high - low) < 1e-9:
++            return NODATA, f"{name}: reference groups coincide"
++        r = (test - low) / (high - low)
++        return _banded(r, check, f"{name}: r={r:.3f} ({check['low_group']}={low:.3f}, {check['test_group']}={test:.3f}, "
++                                 f"{check['high_group']}={high:.3f})")
++    if kind == "ratio":
++        a = _group_median(rows, {**check["where"], "group": check["group_a"]}, check["metric"], check["min_n"])
++        b = _group_median(rows, {**check["where"], "group": check["group_b"]}, check["metric"], check["min_n"])
++        if a is None or b is None or b <= 0:
++            return NODATA, f"{name}: not enough data ({check['group_a']}={a}, {check['group_b']}={b})"
++        return _banded(a / b, check, f"{name}: ratio={a / b:.3f} ({check['group_a']}={a:.4g}, {check['group_b']}={b:.4g})")
++    found = pairs(check, rows)
++    if kind == "loss_ratio":  # a ratio of losses only means something when both are nonnegative and b is not zero
++        found = [p for p in found if p[0] >= 0 and p[1] > 0]
++    sets = len({p[2] for p in found})
++    if len(found) < check["min_pairs"] or sets < check["min_sets"]:
++        return NODATA, (f"{name}: {len(found)} pairs in {sets} sets, "
++                        f"need at least {check['min_pairs']} in {check['min_sets']}")
++    if kind == "win_rate":
++        stat = sum(1.0 if a < b else 0.5 if a == b else 0.0 for a, b, _ in found) / len(found)
++    else:
++        stat = statistics.median(a / b for a, b, _ in found)
++    ok = OPS[check["op"]](stat, check["value"])
++    return (PASS if ok else FAIL), (f"{name}: {kind}={stat:.3f} over {len(found)} pairs in {sets} sets, "
++                                    f"need {check['op']} {check['value']}")
++
++
++def verdict(results: list[tuple[str, str]]) -> str:
++    states = [state for state, _ in results]
++    if FAIL in states:
++        return "FALSIFIED"
++    if NODATA in states:
++        return "INCONCLUSIVE"
++    return "MIXED" if BAND in states else "VERIFIED"
++
++
++@functools.lru_cache(maxsize=2)
++def _parse(data: bytes) -> list[dict]:
++    return [json.loads(x) for x in data.decode("utf-8").splitlines() if x.strip()]
++
++
++def load_rows(paths: list[Path]) -> tuple[list[dict], str]:
++    """Rows of these JSONL files, with a fingerprint of their bytes. A file not written yet holds no rows; a torn line raises."""
++    data = b"\n".join(path.read_bytes() for path in paths if path.exists())
++    return _parse(data), hashlib.sha256(data).hexdigest()[:12]
+diff --git a/src/aiq_kb/kb_science_loop.py b/src/aiq_kb/kb_science_loop.py
+index c97d06b..74c9e5d 100644
+--- a/src/aiq_kb/kb_science_loop.py
++++ b/src/aiq_kb/kb_science_loop.py
+@@ -45,6 +45,8 @@ if __package__:
+     from .codex_agent import CodexSession
+     from .soa_index import brief as soa_brief, compute as soa_compute
+     from .kb_lab import model_row, validate_allowlist
++    from .kb_checks import (BAND, FAIL, NODATA, PASS, check_name, load_rows, merge_checks, normalize_checks, run_check,
++                            verdict)
+     from .kb_jobs import Jobs
+     from .kb_jobs import finish_job, process_alive, read_job, update_job, worker_lock
+ else:
+@@ -55,6 +57,8 @@ else:
+     from codex_agent import CodexSession
+     from soa_index import brief as soa_brief, compute as soa_compute
+     from kb_lab import model_row, validate_allowlist
++    from kb_checks import (BAND, FAIL, NODATA, PASS, check_name, load_rows, merge_checks, normalize_checks, run_check,
++                           verdict)
+     from kb_jobs import Jobs
+     from kb_jobs import finish_job, process_alive, read_job, update_job, worker_lock
+ 
+@@ -157,7 +161,8 @@ Operations (each one is logged as a commit with your reason):
+ - merge_claims: fuse near-duplicates or special cases of one rule into one sharper claim. s and f are summed by default.
+   Passing a single ID rewrites that claim in place (counts kept).
+ - delete_claim: refuted or out-of-scope claims. Claims currently shown to solvers cannot be deleted (merge or sharpen
+-  them instead). Others need evidence s+f>=5 with credibility<0.4, or >=2 counterexample question IDs from history.
++  them instead). Others need evidence s+f>=5 with credibility<0.4, >=2 history question IDs whose solve cited this claim
++  version and scored below 1, or one of the claim's checks failing on replay.
+ - adjust_counts: discouraged. Changing s alone needs a concrete reason; changing s+f (total evidence) even more so.
+ 
+ Workflow (stick to this):
+@@ -272,7 +277,25 @@ Finish with plain text:
+ <report>at most 350 words: answer, phase table (condition -> win rate n, median loss ratio), mechanism + the
+ prediction you tested, coverage caveats</report>"""
+ 
+-HARNESS_VERSION = hashlib.sha1((KB_BLOCK + DISCOVER_PROMPT + GUIDE_RIGHT + GUIDE_WRONG + SUMMARIZER_SYSTEM)
++CHECKS_RULE = """
++Executable checks: add, revise and merge accept `checks`, replayed by the harness on stored data whenever a claim is
++written. On load_lab(), compare two arms inside one set_id, e.g. {"type": "win_rate", "where": {"family": "f"},
++"a": {"optimizer.type": "Adam"}, "b": {"optimizer.type": "SGD"}, "pair_on": ["depth", "width"], "op": ">=", "value": 0.7,
++"min_pairs": 8, "min_sets": 4}. type win_rate is the share of pairs a wins on lower loss; type loss_ratio is the median of
++a/b, so {"op": "<=", "value": 0.9} means at least 10% lower loss. Use pair_on to hold confounders equal. min_pairs is at
++least 5 and min_sets at least 3. Merged and revised claims inherit every ancestor check and are written only if all of
++them pass, so a claim that no longer passes must be deleted and restated. A failing check rejects an added claim; too
++little data does not, and the claim stays pending. Too little data is never a falsification."""
++CHECK_TABLE_RULE = """
++Checks can also read this run's result tables, one row per run. {"type": "ratio", "metric": "F", "where": {"task": "t"},
++"group_a": "A", "group_b": "B", "min_n": 3, "pass": {"op": "<=", "value": 0.5}, "fail": {"op": ">=", "value": 1.0}} is
++median A / median B. position takes metric, where, low_group, high_group, test_group, pass and fail, and places the test
++group at r=0 for the low group and r=1 for the high group, over rows with fit=true. count takes where, where_total,
++min_total, op and value, and counts rows once where_total selects at least min_total. A result between pass and fail is
++MIXED: an added claim stays pending, merge and revise are refused, and it is not a falsification."""
++
++HARNESS_VERSION = hashlib.sha1((KB_BLOCK + DISCOVER_PROMPT + GUIDE_RIGHT + GUIDE_WRONG + SUMMARIZER_SYSTEM + CHECKS_RULE
++                                + CHECK_TABLE_RULE)
+                                .encode()).hexdigest()[:10]
+ SCIENCE_HARNESS = hashlib.sha1((HARNESS_VERSION + KB_TOOL_NOTE_SCIENCE + SCIENCE_RULE + RESEARCH_SYSTEM + CONTROL_RULE)
+                                .encode()).hexdigest()[:10]
+@@ -454,6 +477,18 @@ def science_fields(a: dict) -> tuple[dict, str | None]:
+     return out, None
+ 
+ 
++def checks_suffix(note: str) -> str:
++    return f" | checks: {note}" if note else ""
++
++
++def unsettled_notes(results: list[tuple[str, str]]) -> list[str]:
++    """Results that are neither a pass nor a falsification."""
++    missing = [m for state, m in results if state == NODATA]
++    mixed = [m for state, m in results if state == BAND]
++    return ([f"insufficient data, not falsified: {'; '.join(missing)}"] if missing else []) + (
++        [f"mixed result, not falsified: {'; '.join(mixed)}"] if mixed else [])
++
++
+ def regime_line(reg: dict | None) -> str:
+     if not reg:
+         return ""
+@@ -506,11 +541,14 @@ class KB:
+         claims = []
+         for c in src["claims"]:
+             s, f = float(c["support_count"]), float(c["failure_count"])
++            checks, error = normalize_checks(c.get("checks"))
++            if error:
++                raise ValueError(f"seed claim {c['id']}: {error}")
+             claims.append({"id": c["id"], "text": c["text"], "support_count": s, "failure_count": f,
+                            "credibility": credibility(s, f), "created_epoch": 0, "sources": [],
+                            "merged_from": c.get("merged_from", []),
+                            "origin": c.get("origin") or f"seed:{path.name}",
+-                           **{k: c[k] for k in SCIENCE_FIELDS if c.get(k)}})
++                           **{k: c[k] for k in SCIENCE_FIELDS if c.get(k)}, **({"checks": checks} if checks else {})})
+         return cls({"schema_version": "architectureiq_kb_v4", "epoch": 0, "claims": claims}, run)
+ 
+     def to_doc(self) -> dict:
+@@ -548,6 +586,20 @@ class KB:
+             os.fsync(fh.fileno())
+         self.pending = []
+ 
++    def ancestor_checks(self, ids: list[str]) -> list[dict]:
++        """Checks of these claims and of every claim merged into them, live or retired."""
++        retired = {c["id"]: c for c in self.retired}
++        groups, stack, seen = [], list(ids), set()
++        while stack:
++            cid = stack.pop()
++            c = self.claims.get(cid) or retired.get(cid)
++            if c is None or cid in seen:
++                continue
++            seen.add(cid)
++            groups.append(c.get("checks", []))
++            stack += c.get("merged_from", [])
++        return merge_checks(*groups)
++
+     def _set(self, c: dict, s: float, f: float) -> None:
+         c["support_count"], c["failure_count"] = round(s, 4), round(f, 4)
+         c["credibility"] = credibility(s, f)
+@@ -755,7 +807,7 @@ class History:
+ 
+ 
+ def tools_spec(summarizer: bool, corpus: bool = False, kb_tool: bool = False, science: bool = False,
+-               lab: bool = False, research: bool = False) -> list[dict]:
++               lab: bool = False, research: bool = False, checks: bool = False) -> list[dict]:
+     def fn(name, desc, props, req=()):
+         return {"type": "function", "function": {"name": name, "description": desc, "parameters": {
+             "type": "object", "properties": props, "required": list(req)}}}
+@@ -784,6 +836,8 @@ def tools_spec(summarizer: bool, corpus: bool = False, kb_tool: bool = False, sc
+                                "boundary (where the comparison flips) and evidence counts.", {"claim_id": s},
+                                ["claim_id"]))
+     sci = {"mechanism": s, "regime": {"type": "object"}, "phase": s, "refines": s} if science else {}
++    chk = {"checks": {"type": "array", "items": {"type": "object"},
++                      "description": "Optional executable checks replayed on stored data; see the checks rule."}} if checks else {}
+     if summarizer:
+         tools += [
+             fn("kb_open", "Read saved ongoing science reports and claim evidence.",
+@@ -791,15 +845,17 @@ def tools_spec(summarizer: bool, corpus: bool = False, kb_tool: bool = False, sc
+             fn("kb_view", "Show full KB claims. Filter by ids or substring; sort by credibility|evidence|id.",
+                {"ids": {"type": "array", "items": s}, "contains": s, "sort": s, "limit": {"type": "integer"}}),
+             fn("add_claim", "Add a new claim (commit).", {"text": s, "source_question_ids": {"type": "array", "items": s},
+-               "reason": s, **sci}, ["text", "source_question_ids", "reason"]),
++               "reason": s, **sci, **chk}, ["text", "source_question_ids", "reason"]),
+             fn("delete_claim", "Delete a refuted or out-of-scope claim (commit). Requires s+f>=5 and credibility<0.4, "
+-               "or >=2 counterexample question IDs from history. Legacy top-claim rendering protects shown claims; "
++               ">=2 history question IDs whose solve cited this claim version and scored below 1, or a check of the "
++               "claim failing on replay. Legacy top-claim rendering protects shown claims; "
+                "tool and full-short rendering allow retirement while preserving frozen solver snapshots.",
+                {"claim_id": s, "reason": s, "counterexample_question_ids": {"type": "array", "items": s}},
+                ["claim_id", "reason"]),
+             fn("merge_claims", "Merge claims into one new claim; s,f summed unless overridden (discouraged). "
+-               "One id = rewrite in place.", {"claim_ids": {"type": "array", "items": s}, "text": s, "reason": s,
+-               "support": n, "failure": n, **sci}, ["claim_ids", "text", "reason"]),
++               "One id = rewrite in place. Inherits every ancestor check; written only if all of them pass.",
++               {"claim_ids": {"type": "array", "items": s}, "text": s, "reason": s,
++               "support": n, "failure": n, **sci, **chk}, ["claim_ids", "text", "reason"]),
+             fn("adjust_counts", "Set s and f of a claim (discouraged; justify).", {"claim_id": s, "support": n,
+                "failure": n, "reason": s}, ["claim_id", "support", "failure", "reason"]),
+             fn("finish", "End curation with the Science-of-AI digest.", {"science": s}, ["science"]),
+@@ -847,6 +903,7 @@ class Loop:
+         for field in ("pool", "lab", "corpus", "seed_kb", "publish_blog"):
+             if getattr(args, field, None):
+                 setattr(args, field, str(Path(getattr(args, field)).resolve()))
++        args.check_table = [str(Path(p).resolve()) for p in getattr(args, "check_table", None) or []]
+         self.args = args
+         CONFIG.run_root(args.run_name)
+         self.run = OUT_ROOT / args.run_name
+@@ -1396,7 +1453,6 @@ class Loop:
+         work = self.run / "sandbox" / f"e{epoch:04d}" / "_summarizer"
+         n_research = [0]
+         shown = {c["id"] for c in kb.rendered()} if self.args.render not in ("tool", "brief") else set()
+-        hist_ids = set(hist.rows)
+         adds = [sum(op["op"] == "add" for op in kb.pending)] if self.worker_job else [0]
+         science = [""]
+         structural = [0]
+@@ -1419,7 +1475,8 @@ class Loop:
+                     a.get("sort"), lambda c: -c["credibility"])
+                 cs = sorted(cs, key=key)[: int(a.get("limit") or 40)]
+                 return "\n".join(f"[{c['id']}] cred={c['credibility']:.3f} s={c['support_count']:.2f} "
+-                                 f"f={c['failure_count']:.2f} ep={c['created_epoch']} src={c.get('sources', [])[:5]}\n"
++                                 f"f={c['failure_count']:.2f} ep={c['created_epoch']} src={c.get('sources', [])[:5]}"
++                                 f"{' checks=' + str(len(c['checks'])) if c.get('checks') else ''}\n"
+                                  f"{c['text']}" for c in cs) or "no claims"
+             if name == "kb_open":
+                 return self.open_kb(kb, a.get("targets", []), latest=bool(self.worker_job))
+@@ -1457,10 +1514,16 @@ class Loop:
+             if name == "add_claim":
+                 if adds[0] >= self.args.max_add:
+                     return f"rejected: at most {self.args.max_add} additions per epoch"
++                checks, rejection, note = self.gate_checks(kb, [], a.get("checks"), require_pass=False)
++                if rejection:
++                    return rejection
++                if checks:
++                    fields = {**(fields or {}), "checks": checks}
+                 text = a["text"].strip()
+                 adds[0] += 1
+                 structural[0] += 1
+-                return "added " + kb.add(text, a.get("source_question_ids", []), a["reason"], self.author_summ, fields)
++                return "added " + kb.add(text, a.get("source_question_ids", []), a["reason"] + checks_suffix(note),
++                                         self.author_summ, fields) + (f"; checks: {note}" if note else "")
+             if name == "delete_claim":
+                 if a["claim_id"] not in kb.claims:
+                     return f"conflict: {a['claim_id']} does not exist (already merged/deleted?)"
+@@ -1468,23 +1531,27 @@ class Loop:
+                 if a["claim_id"] in shown:
+                     return (f"rejected: {a['claim_id']} is shown to solvers; merge it into a sharper claim or rewrite it "
+                             "in place instead (credit will demote it if it keeps failing)")
+-                ev = c["support_count"] + c["failure_count"]
+-                cx = [q for q in a.get("counterexample_question_ids") or [] if q in hist_ids]
+-                if not (ev >= 5 and c["credibility"] < 0.4) and len(cx) < 2:
+-                    return (f"rejected: {a['claim_id']} has evidence {ev:.1f}, cred {c['credibility']:.2f}; deletion needs "
+-                            "s+f>=5 and cred<0.4, or >=2 valid counterexample_question_ids from history")
+-                kb.delete(a["claim_id"], a["reason"] + (f" | counterexamples: {cx}" if cx else ""), self.author_summ)
++                rejection, note = self.delete_gate(c, a.get("counterexample_question_ids"), hist.rows)
++                if rejection:
++                    return rejection
++                kb.delete(a["claim_id"], a["reason"] + note, self.author_summ)
+                 structural[0] += 1
+                 return "deleted " + a["claim_id"]
+             if name == "merge_claims":
+                 missing = [i for i in a["claim_ids"] if i not in kb.claims]
+                 if missing or not a["claim_ids"]:
+                     return f"conflict: missing claims {missing}"
+-                new = kb.merge(a["claim_ids"], a["text"].strip(), a["reason"], self.author_summ,
++                checks, rejection, note = self.gate_checks(kb, a["claim_ids"], a.get("checks"), require_pass=True)
++                if rejection:
++                    return rejection
++                if checks:
++                    fields = {**(fields or {}), "checks": checks}
++                new = kb.merge(a["claim_ids"], a["text"].strip(), a["reason"] + checks_suffix(note), self.author_summ,
+                                a.get("support"), a.get("failure"), fields)
+                 c = kb.claims[new]
+                 structural[0] += 1
+-                return f"merged into {new} (s={c['support_count']:.2f}, f={c['failure_count']:.2f})"
++                return (f"merged into {new} (s={c['support_count']:.2f}, f={c['failure_count']:.2f})"
++                        + (f"; checks: {note}" if note else ""))
+             if name == "adjust_counts":
+                 if a["claim_id"] not in kb.claims:
+                     return f"conflict: {a['claim_id']} does not exist"
+@@ -1539,6 +1606,7 @@ class Loop:
+             if self.args.macro_every:
+                 system += CONSOLIDATE_RULE if self.consolidation(epoch) else COLLECT_RULE
+             user += "\n\nSaved scientific reports (open with kb_open):\n" + json.dumps(kb.reports, ensure_ascii=False)
++        system += self.checks_rule()
+         if self.args.render == "tool":
+             system = re.sub(r"Future solvers see only a question plus the KB rendered read-only \(.*?claims\)\.",
+                             "Future solvers (a strong model) see the question and may query the KB on demand with a "
+@@ -1552,7 +1620,8 @@ class Loop:
+                 f"about {self.args.summ_turns} turns total", f"about {self.args.summ_turns} tool calls total")
+             sess = CodexSession(work / "_codex", self.summ_model, system,
+                                 tools_spec(True, bool(self.args.corpus), science=self.args.science,
+-                                           lab=bool(self.args.lab), research=self.args.science), handler)
++                                           lab=bool(self.args.lab), research=self.args.science,
++                                           checks=any(self.check_sources().values())), handler)
+             try:
+                 r = sess.turn(user, self.args.summ_effort, "discover", max_calls=None if self.worker_job else self.args.summ_turns,
+                               warn_text="issue any backtested operations now, then call finish(science=...).",
+@@ -1590,7 +1659,8 @@ class Loop:
+                     f"{kb.index()}\nContinue the curation (do not redo applied edits), then call finish(science=...).")
+                 final, trace, info = run_claude_agent(
+                     system, prompt, tools_spec(True, bool(self.args.corpus), science=self.args.science, lab=bool(self.args.lab),
+-                    research=self.args.science and self.args.research_calls > 0), handler, model=self.summ_model, effort=self.args.summ_effort,
++                    research=self.args.science and self.args.research_calls > 0,
++                    checks=any(self.check_sources().values())), handler, model=self.summ_model, effort=self.args.summ_effort,
+                     workdir=work, max_calls=None if self.worker_job else max(8, self.args.summ_turns - calls_used), stop_tool="finish", warn_calls=5,
+                     warn_text="if you have backtested operations, issue them now; otherwise finish (no edit is a valid "
+                               "outcome).", budget_usd=self.args.summ_budget_usd,
+@@ -1960,7 +2030,8 @@ class Loop:
+                 return self.publish_report(a["text"], a.get("claim_ids"), a.get("title") or question,
+                                            self.worker_job["payload"]["topic"], kb)
+             if name == "propose_changes" and self.worker_job:
+-                return self.propose_changes(kb, a.get("operations", []), a.get("report"))
++                return self.propose_changes(kb, a.get("operations", []), a.get("report"),
++                                            History(self.visible_rows(vis_dir)).rows)
+             if name == "refresh_observations" and self.worker_job:
+                 job = read_job(self.worker_path)
+                 if "observations_path" in job:
+@@ -2011,7 +2082,8 @@ class Loop:
+                       "window changes your epoch membership and does not terminate your work. Read load_history() and load_kb() "
+                       "for the frozen research inputs, preserving measurement sources. Make predictions for unmeasured conditions "
+                       "before experiments; report counterexamples instead of decorating facts with a mechanism. "
+-                      "Only use allowed lab datasets. Return <report>your latest full report</report> when this investigation ends.")
++                      "Only use allowed lab datasets. Return <report>your latest full report</report> when this investigation ends."
++                      + self.checks_rule())
+             tools.append({"type": "function", "function": {"name": "kb_open",
+                           "description": "Read latest saved research reports by topic, job ID, claim ID or science.",
+                           "parameters": {"type": "object", "properties": {
+@@ -2030,6 +2102,8 @@ class Loop:
+                           "claim_ids": {"type": "array", "items": {"type": "string"}},
+                           "text": {"type": "string"}, "reason": {"type": "string"},
+                           "source_question_ids": {"type": "array", "items": {"type": "string"}},
++                          "checks": {"type": "array", "items": {"type": "object"}},
++                          "counterexample_question_ids": {"type": "array", "items": {"type": "string"}},
+                           "fields": {"type": "object"}}, "required": ["op", "reason"]}},
+                           "report": {"type": "object", "properties": {"text": {"type": "string"},
+                           "title": {"type": "string"}, "topic": {"type": "string"},
+@@ -2119,9 +2193,97 @@ class Loop:
+             write_json(self.worker_path.parent / "kb_checkpoint.json",
+                        {"sequence": self.job_sequence, "kb": doc})
+ 
+-    def propose_changes(self, kb: KB, operations: list[dict], report: dict | None = None) -> str:
++    def check_sources(self) -> dict[str, list[Path]]:
++        lab = getattr(self.args, "lab", None)
++        return {"lab": [Path(lab), self.run / "lab_experiments.jsonl"] if lab else [],
++                "table": [Path(p) for p in getattr(self.args, "check_table", None) or []]}
++
++    def checks_rule(self) -> str:
++        sources = self.check_sources()
++        return (CHECKS_RULE if any(sources.values()) else "") + (CHECK_TABLE_RULE if sources["table"] else "")
++
++    def replay_checks(self, checks: list[dict]) -> tuple[list[tuple[str, str]], str]:
++        """Run each check on its source. A source we cannot read is too little data, not a failure."""
++        sources, results, fingerprints = self.check_sources(), [], {}
++        for c in checks:
++            paths = sources[c["source"]]
++            if not paths:
++                results.append((NODATA, f"{check_name(c)}: no {c['source']} database configured"))
++                continue
++            try:
++                rows, fingerprints[c["source"]] = load_rows(paths)
++            except (OSError, ValueError) as exc:
++                results.append((NODATA, f"{check_name(c)}: {c['source']} database unreadable ({type(exc).__name__})"))
++                continue
++            results.append(run_check(c, rows))
++        return results, " ".join(f"{k}={v}" for k, v in sorted(fingerprints.items())) or "no data"
++
++    def gate_checks(self, kb: KB, ids: list[str], raw: Any, require_pass: bool) -> tuple[list[dict], str | None, str]:
++        """Replay submitted plus inherited checks for a write. Returns (checks to store, rejection, audit note)."""
++        own, error = normalize_checks(raw)
++        if error:
++            return [], f"rejected: {error}", ""
++        checks = merge_checks(kb.ancestor_checks(ids), own)
++        if not checks:
++            return [], None, ""
++        results, fingerprint = self.replay_checks(checks)
++        failed = [m for state, m in results if state == FAIL]
++        passed = sum(state == PASS for state, _ in results)
++        unsettled = unsettled_notes(results)
++        if failed:
++            return [], "rejected: check failed: " + "; ".join(failed), ""
++        if unsettled and require_pass:
++            return [], "rejected: " + "; ".join(unsettled), ""
++        return checks, None, ", ".join([f"{passed} passed", *["pending on " + u for u in unsettled]]) + (
++            f" (verdict {verdict(results)}; {fingerprint})")
++
++    def verify_counterexamples(self, claim: dict, question_ids: list[str], history: dict[str, dict]) -> tuple[list[str], dict]:
++        """A counterexample is a visible solve that cited this version of the claim and lost credit."""
++        verified, unverified = [], {}
++        for qid in dict.fromkeys(question_ids):
++            row, why = history.get(qid), None
++            if row is None:
++                why = "not in visible history"
++            elif claim["id"] not in (row.get("cited") or []):
++                why = "solve did not cite this claim"
++            elif not isinstance(row.get("score"), (int, float)) or row["score"] >= 1:
++                why = "solve did not lose credit"
++            else:
++                origin = OUT_ROOT / row["imported_from"] if row.get("imported_from") else self.run
++                snapshot = origin / "solver_snapshots" / f"{row.get('solver_snapshot')}.json"
++                used = ({c["id"]: c for c in json.loads(snapshot.read_text())["claims"]}.get(claim["id"])
++                        if snapshot.exists() else None)
++                if used is None or any(used.get(k) != claim.get(k) for k in ("text", *SCIENCE_FIELDS)):
++                    why = "solve used another version of this claim"
++            if why:
++                unverified[qid] = why
++            else:
++                verified.append(qid)
++        return verified, unverified
++
++    def delete_gate(self, claim: dict, question_ids: Any, history: dict[str, dict]) -> tuple[str | None, str]:
++        """Deletion needs poor solver credit, >=2 verified counterexamples, or a check that fails. Returns (rejection, note)."""
++        if question_ids is not None and (not isinstance(question_ids, list)
++                                         or any(not isinstance(q, str) for q in question_ids)):
++            return "rejected: counterexample_question_ids must be a list of strings", ""
++        cx, unverified = self.verify_counterexamples(claim, question_ids or [], history)
++        results = self.replay_checks(claim["checks"])[0] if claim.get("checks") else []
++        failed = [m for state, m in results if state == FAIL]
++        ev = claim["support_count"] + claim["failure_count"]
++        if not (ev >= 5 and claim["credibility"] < 0.4) and len(cx) < 2 and not failed:
++            return "; ".join([f"rejected: {claim['id']} has evidence {ev:.1f}, cred {claim['credibility']:.2f}; deletion needs "
++                              "s+f>=5 and cred<0.4, >=2 counterexample_question_ids whose solve cited this claim version and "
++                              "scored below 1, or a failing check",
++                              *([f"unverified counterexamples: {unverified}"] if unverified else []),
++                              *unsettled_notes(results)]), ""
++        return None, ((f" | counterexamples: {cx}" if cx else "")
++                      + (f" | failed checks: {'; '.join(failed)}" if failed else ""))
++
++    def propose_changes(self, kb: KB, operations: list[dict], report: dict | None = None,
++                        history: dict[str, dict] | None = None) -> str:
+         author = {"role": "researcher", "model": self.args.model, "job_id": self.worker_job["id"]}
+         results = []
++        pending_checks = {}
+         with self.lock:
+             if not isinstance(operations, list) or any(not isinstance(op, dict) for op in operations):
+                 return "rejected: operations must be a list of objects"
+@@ -2138,7 +2300,8 @@ class Loop:
+             staged = KB(kb.to_doc(), self.worker_path.parent)
+             start = len(staged.pending)
+             for op in operations:
+-                if set(op) - {"op", "claim_ids", "text", "reason", "source_question_ids", "fields"}:
++                if set(op) - {"op", "claim_ids", "text", "reason", "source_question_ids", "fields",
++                              "checks", "counterexample_question_ids"}:
+                     return "rejected: operation contains reserved or unknown fields"
+                 kind, ids, reason = op.get("op"), op.get("claim_ids", []), op.get("reason", "")
+                 if not isinstance(ids, list) or any(not isinstance(cid, str) for cid in ids):
+@@ -2160,13 +2323,31 @@ class Loop:
+                 fields = op.get("fields", {})
+                 if not isinstance(fields, dict) or set(fields) - set(SCIENCE_FIELDS) - {"tags"}:
+                     return "rejected: fields may contain scientific annotations and tags only"
++                if "checks" in op and kind not in ("add", "revise", "merge"):
++                    return "rejected: checks apply to add, revise and merge only"
++                if "counterexample_question_ids" in op and kind != "delete":
++                    return "rejected: counterexample_question_ids apply to delete only"
++                if kind in ("add", "revise", "merge"):
++                    checks, rejection, note = self.gate_checks(staged, ids if kind != "add" else [], op.get("checks"),
++                                                               require_pass=kind != "add")
++                    if rejection:
++                        return rejection
++                    if checks:
++                        fields = {**fields, "checks": checks}
++                    reason += checks_suffix(note)
+                 if kind == "add":
+                     results.append(staged.add(op["text"], op.get("source_question_ids", []), reason, author, fields))
++                    if "not falsified" in note:
++                        pending_checks[results[-1]] = note
+                 elif kind in ("revise", "merge"):
+                     results.append(staged.merge(ids, op["text"], reason, author, None, None, fields))
+                 elif kind == "delete":
+                     for cid in ids:
+-                        staged.delete(cid, reason, author)
++                        rejection, note = self.delete_gate(staged.claims[cid], op.get("counterexample_question_ids"),
++                                                           history or {})
++                        if rejection:
++                            return rejection
++                        staged.delete(cid, reason + note, author)
+                 else:
+                     for cid in ids:
+                         staged.annotate(cid, fields, reason, author)
+@@ -2188,7 +2369,8 @@ class Loop:
+             kb.checkpoint()
+         return json.dumps({"submitted": len(operations), "claim_ids": results,
+                            "report_id": "R" + hashlib.sha256(topic.encode()).hexdigest()[:10]
+-                           if report is not None else None})
++                           if report is not None else None,
++                           **({"checks_pending": pending_checks} if pending_checks else {})})
+ 
+     def publish_report(self, text: str, claim_ids: list[str] | None, title: str | None, topic: str, kb: KB) -> str:
+         with self.lock:
+@@ -2850,6 +3032,8 @@ def parse(argv=None) -> argparse.Namespace:
+     p.add_argument("--summ-budget-usd", type=float, default=15.0)
+     p.add_argument("--science", action="store_true", help="mechanism/regime/phase claims, kb_explain, research tool")
+     p.add_argument("--lab", default=None, help="lab_db.jsonl (kb_lab.py build) exposed as load_lab() + experiments")
++    p.add_argument("--check-table", action="append", default=[],
++                   help="JSONL result table that claim checks may read as source table; repeat to concatenate")
+     p.add_argument("--lab-workers", type=int, default=12)
+     p.add_argument("--research-calls", type=int, default=3, help="research tasks per epoch (summarizer)")
+     p.add_argument("--research-turns", type=int, default=14)
+diff --git a/tests/test_kb_checks.py b/tests/test_kb_checks.py
+new file mode 100644
+index 0000000..bce3009
+--- /dev/null
++++ b/tests/test_kb_checks.py
+@@ -0,0 +1,846 @@
++"""Executable claim checks: replay on synthetic lab rows, the write gates, and real tool calls from fake CLIs."""
++import copy
++import json
++import os
++from pathlib import Path
++import sys
++import tempfile
++import threading
++from types import SimpleNamespace
++import unittest
++from unittest.mock import patch
++
++from aiq_kb import kb_science_loop as loop, cc_agent, codex_agent, sample_kb_science_release as release
++from aiq_kb.kb_checks import BAND, FAIL, MIN_PAIRS, MIN_SETS, NODATA, PASS, normalize_checks, run_check, verdict
++
++
++def row(set_id, optimizer, mean, family="wins", **extra):
++    return {"family": family, "set_id": set_id, "candidate_id": f"c_{optimizer}_{mean}", "metric": "loss", "depth": 2,
++            "width": 64, "optimizer": {"type": optimizer}, "mean": mean, "std": .01, **extra}
++
++
++def lab_rows():
++    """Adam wins six sets in family `wins`, loses six in `loses`; family `thin` has too few sets to conclude anything."""
++    rows = []
++    for i in range(6):
++        rows += [row(f"w{i}", "Adam", 1.0), row(f"w{i}", "SGD", 2.0)]
++        rows += [row(f"l{i}", "Adam", 2.0, "loses"), row(f"l{i}", "SGD", 1.0, "loses")]
++    return rows + [row("t0", "Adam", 1.0, "thin"), row("t0", "SGD", 2.0, "thin")]
++
++
++def check(family="wins", kind="win_rate", op=">=", value=.7, **extra):
++    return {"type": kind, "where": {"family": family}, "a": {"optimizer.type": "Adam"},
++            "b": {"optimizer.type": "SGD"}, "op": op, "value": value, **extra}
++
++
++def normal(*checks):
++    out, error = normalize_checks(list(checks))
++    assert error is None, error
++    return out
++
++
++def claim(cid="K1001", text="Measured local observation", s=3., f=1., **extra):
++    return {"id": cid, "text": text, "support_count": s, "failure_count": f, "credibility": (s + 1) / (s + f + 2),
++            "created_epoch": 0, "sources": [], "merged_from": [], **extra}
++
++
++class ReplayTests(unittest.TestCase):
++    def state(self, c, rows):
++        return run_check(normal(c)[0], rows)[0]
++
++    def test_win_rate_passes_and_fails_on_the_measured_direction(self):
++        self.assertEqual(self.state(check("wins"), lab_rows()), PASS)
++        self.assertEqual(self.state(check("loses"), lab_rows()), FAIL)
++
++    def test_loss_ratio_is_the_median_of_a_over_b(self):
++        self.assertEqual(self.state(check("wins", "loss_ratio", "<=", .6), lab_rows()), PASS)
++        self.assertEqual(self.state(check("wins", "loss_ratio", "<=", .4), lab_rows()), FAIL)
++
++    def test_loss_ratio_ignores_pairs_where_a_ratio_of_losses_has_no_meaning(self):
++        rows = [r for i in range(MIN_SETS + 3) for r in (row(f"s{i}", "Adam", -1.0), row(f"s{i}", "SGD", 2.0))]
++        self.assertEqual(self.state(check("wins", "loss_ratio", "<=", .9), rows), NODATA)
++
++    def test_ties_count_one_half(self):
++        rows = [r for i in range(6) for r in (row(f"s{i}", "Adam", 1.0), row(f"s{i}", "SGD", 1.0))]
++        self.assertEqual(self.state(check(value=.5), rows), PASS)
++        self.assertEqual(self.state(check(value=.51), rows), FAIL)
++
++    def test_comparison_stays_inside_one_set_even_when_pooling_would_reverse_it(self):
++        # The easy datasets hold most Adam rows, so pooled Adam looks better although SGD wins every set.
++        rows = []
++        for i in range(6):
++            rows += [row(f"easy{i}", "Adam", 1.0), row(f"easy{i}", "Adam", 1.0), row(f"easy{i}", "SGD", .9)]
++            rows += [row(f"hard{i}", "Adam", 10.0), row(f"hard{i}", "SGD", 9.0), row(f"hard{i}", "SGD", 9.0)]
++        adam = [r["mean"] for r in rows if r["optimizer"]["type"] == "Adam"]
++        sgd = [r["mean"] for r in rows if r["optimizer"]["type"] == "SGD"]
++        self.assertLess(sum(adam) / len(adam), sum(sgd) / len(sgd))
++        self.assertEqual(self.state(check(value=.5), rows), FAIL)
++
++    def test_arms_in_different_sets_are_never_paired(self):
++        rows = [row(f"a{i}", "Adam", 1.0) for i in range(8)] + [row(f"b{i}", "SGD", 2.0) for i in range(8)]
++        self.assertEqual(self.state(check(), rows), NODATA)
++
++    def test_pair_on_holds_a_confounder_equal(self):
++        # Adam was only measured wide, SGD wide and narrow. Same width says SGD wins; the pooled arm says Adam does.
++        rows = []
++        for i in range(6):
++            rows += [row(f"s{i}", "Adam", 2.0, width=512), row(f"s{i}", "SGD", 1.0, width=512),
++                     row(f"s{i}", "SGD", 9.0, width=8)]
++        self.assertEqual(self.state(check(value=.7), rows), PASS)
++        self.assertEqual(self.state(check(value=.7, pair_on=["width"]), rows), FAIL)
++
++    def test_too_few_pairs_or_sets_is_no_data_not_failure(self):
++        self.assertEqual(self.state(check("thin"), lab_rows()), NODATA)
++        # Many pairs inside too few sets, with the arm direction wrong: still not a falsification.
++        rows = [row(f"s{i % 2}", kind, mean, width=i) for i in range(10)
++                for kind, mean in (("Adam", 2.0), ("SGD", 1.0))]
++        state, message = run_check(normal(check(pair_on=["width"]))[0], rows)
++        self.assertEqual(state, NODATA)
++        self.assertIn("10 pairs in 2 sets", message)
++
++    def test_failed_excluded_and_unmeasured_rows_are_not_data(self):
++        for bad in ({"failed_seeds": 3}, {"excluded": True}, {"mean": None}, {"mean": float("nan")}, {"set_id": None}):
++            rows = [r for i in range(6) for r in (row(f"s{i}", "Adam", 1.0), {**row(f"s{i}", "SGD", 2.0), **bad})]
++            self.assertEqual(self.state(check(), rows), NODATA, bad)
++
++    def test_rows_on_different_metrics_are_not_paired(self):
++        rows = [r for i in range(6) for r in (row(f"s{i}", "Adam", 1.0), row(f"s{i}", "SGD", 2.0, metric="acc"))]
++        self.assertEqual(self.state(check(), rows), NODATA)
++
++    def test_list_selects_any_of_or_an_exact_list_field(self):
++        any_of = dict(check(), where={"family": ["wins", "other"]})
++        self.assertEqual(self.state(any_of, lab_rows()), PASS)
++        rows = [r for i in range(6) for r in (row(f"s{i}", "Adam", 1.0, layer_norm=[True, True]),
++                                              row(f"s{i}", "SGD", 2.0, layer_norm=[True, True]),
++                                              row(f"s{i}", "SGD", 0.5, layer_norm=[False, False]))]
++        exact = dict(check(), where={"layer_norm": [True, True]})
++        self.assertEqual(self.state(exact, rows), PASS)
++
++
++class ValidationTests(unittest.TestCase):
++    def test_malformed_or_vacuous_checks_are_rejected(self):
++        for bad in ("x", ["x"], [{}], [dict(check(), type="vibes")], [dict(check(), extra=1)], [dict(check(), op="==")],
++                    [dict(check(), value="high")], [dict(check(), value=True)], [dict(check(), value=float("inf"))],
++                    [dict(check(), value=0)], [dict(check(), value=1)], [check(kind="loss_ratio", op="<=", value=0)],
++                    [dict(check(), b=check()["a"])], [dict(check(), b={"width": 64})], [dict(check(), a={})],
++                    [dict(check(), where=None)], [dict(check(), pair_on="width")],
++                    [dict(check(), pair_on=["optimizer.type"])], [dict(check(), min_pairs=MIN_PAIRS - 1)],
++                    [dict(check(), min_sets=MIN_SETS - 1)], [dict(check(), min_sets=True)]):
++            self.assertIsNotNone(normalize_checks(bad)[1], bad)
++
++    def test_ids_come_from_content_so_a_submitted_id_replaces_nothing(self):
++        strong = normal(check(value=.9))[0]
++        forged = normal({**check(value=.1), "check_id": strong["check_id"]})[0]
++        self.assertNotEqual(forged["check_id"], strong["check_id"])
++        self.assertEqual(normal(check(value=.9), dict(check(value=.9), check_id="anything")), [strong])
++
++
++class GateFixture(unittest.TestCase):
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.run = Path(self.temp.name)
++        self.lab = self.run / "lab/lab_db.jsonl"
++        loop.write_jsonl(self.lab, lab_rows())
++        self.obj = loop.Loop.__new__(loop.Loop)
++        self.obj.run = self.run
++        self.obj.lock = threading.RLock()
++        self.obj.args = SimpleNamespace(model="synthetic-test-model", lab=str(self.lab))
++        self.obj.worker_path = self.run / "jobs/Jfixture/job.json"
++        self.obj.worker_path.parent.mkdir(parents=True)
++        self.obj.worker_job = {"id": "Jfixture", "origin_epoch": 3, "payload": {"topic": "fixture"}}
++        self.obj.worker_path.write_text(json.dumps({**self.obj.worker_job, "key": None, "status": "running"}))
++        self.obj.job_sequence = 0
++        self.kb = loop.KB({"epoch": 3, "claims": [claim()]}, self.obj.worker_path.parent)
++        self.obj.job_base = copy.deepcopy(self.kb.to_doc())
++        self.kb.publish_commit = self.obj.journal_commit
++
++    def tearDown(self):
++        self.temp.cleanup()
++
++    def propose(self, *operations, history=None):
++        return self.obj.propose_changes(self.kb, list(operations), None, history)
++
++    def add(self, *checks, text="scoped"):
++        return json.loads(self.propose({"op": "add", "text": text, "reason": "fixture", "checks": list(checks)}))["claim_ids"][0]
++
++    def publications(self):
++        return list(self.obj.worker_path.parent.glob("publications/p*.json"))
++
++    def assert_rejected_untouched(self, before, publications, outcome, phrase):
++        self.assertTrue(outcome.startswith("rejected"), outcome)
++        self.assertIn(phrase, outcome)
++        self.assertEqual(self.kb.to_doc()["claims"], before)
++        self.assertEqual(len(self.publications()), publications)
++
++    def snapshot(self):
++        return copy.deepcopy(self.kb.to_doc()["claims"]), len(self.publications())
++
++
++class ProposeGateTests(GateFixture):
++    def test_passing_add_stores_checks_and_audits_the_replay(self):
++        cid = self.add(check())
++        self.assertEqual(self.kb.claims[cid]["checks"], normal(check()))
++        add = next(c for c in self.kb.pending if c["op"] == "add")
++        self.assertEqual(add["payload"]["checks"], normal(check()))
++        self.assertIn("1 passed", add["reason"])
++        self.assertIn("lab=", add["reason"])
++
++    def test_failing_add_is_rejected_atomically(self):
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "add", "text": "good", "reason": "fixture", "checks": [check()]},
++                               {"op": "add", "text": "bad", "reason": "fixture", "checks": [check("loses")]})
++        self.assert_rejected_untouched(before, published, outcome, "check failed")
++
++    def test_add_on_too_little_data_is_pending_not_rejected(self):
++        outcome = json.loads(self.propose({"op": "add", "text": "t", "reason": "fixture", "checks": [check("thin")]}))
++        cid = outcome["claim_ids"][0]
++        self.assertIn("insufficient data, not falsified", outcome["checks_pending"][cid])
++        self.assertEqual(self.kb.claims[cid]["checks"], normal(check("thin")))
++
++    def test_malformed_check_is_rejected(self):
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "add", "text": "t", "reason": "fixture", "checks": [{"type": "vibes"}]})
++        self.assert_rejected_untouched(before, published, outcome, "check type")
++
++    def test_merge_inherits_all_ancestors_and_passes_them_on(self):
++        first, second = self.add(check(value=.6)), self.add(check(value=.7))
++        third = self.add(check("wins", "loss_ratio", "<=", .6))
++        merged = json.loads(self.propose({"op": "merge", "claim_ids": [first, second], "text": "m", "reason": "fixture"}))["claim_ids"][0]
++        self.assertEqual({c["value"] for c in self.kb.claims[merged]["checks"]}, {.6, .7})
++        top = json.loads(self.propose({"op": "merge", "claim_ids": [merged, third], "text": "n", "reason": "fixture",
++                                       "checks": [check(value=.8)]}))["claim_ids"][0]
++        self.assertEqual(len(self.kb.claims[top]["checks"]), 4)
++
++    def test_a_descendant_cannot_rename_an_ancestors_check(self):
++        cid = self.add({**check(), "check_id": "registered_name"})
++        self.propose({"op": "revise", "claim_ids": [cid], "text": "t", "reason": "r",
++                      "checks": [{**check(), "check_id": "other_name"}]})
++        self.assertEqual([c["label"] for c in self.kb.claims[cid]["checks"]], ["registered_name"])
++
++    def test_retired_ancestor_checks_are_inherited_even_when_the_child_lost_them(self):
++        first, second = self.add(check(value=.6)), self.add(check(value=.7))
++        merged = json.loads(self.propose({"op": "merge", "claim_ids": [first, second], "text": "m", "reason": "fixture"}))["claim_ids"][0]
++        del self.kb.claims[merged]["checks"]
++        revised = self.propose({"op": "revise", "claim_ids": [merged], "text": "r", "reason": "fixture"})
++        self.assertNotIn("rejected", revised)
++        self.assertEqual({c["value"] for c in self.kb.claims[merged]["checks"]}, {.6, .7})
++
++    def test_merge_chain_inside_one_proposal_inherits_checks_of_a_claim_it_just_added(self):
++        outcome = json.loads(self.propose(
++            {"op": "add", "text": "a", "reason": "fixture", "checks": [check()]},
++            {"op": "merge", "claim_ids": ["K1001", "K1002"], "text": "m", "reason": "fixture"}))
++        self.assertEqual(self.kb.claims[outcome["claim_ids"][1]]["checks"], normal(check()))
++
++    def test_merge_is_rejected_when_new_data_breaks_a_parent(self):
++        passing, doomed = self.add(check()), self.add(check("flips"))
++        loop.write_jsonl(self.lab, lab_rows() + [r for i in range(6) for r in
++                         (row(f"f{i}", "Adam", 2.0, "flips"), row(f"f{i}", "SGD", 1.0, "flips"))])
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "merge", "claim_ids": [passing, doomed], "text": "m", "reason": "fixture"})
++        self.assert_rejected_untouched(before, published, outcome, "check failed")
++
++    def test_merge_on_inherited_missing_data_is_rejected_as_insufficient_not_failed(self):
++        passing, thin = self.add(check()), self.add(check("thin"))
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "merge", "claim_ids": [passing, thin], "text": "m", "reason": "fixture"})
++        self.assert_rejected_untouched(before, published, outcome, "insufficient data, not falsified")
++        self.assertNotIn("check failed", outcome)
++        self.assertIn(thin, self.kb.claims)
++
++    def test_pending_claim_can_merge_after_data_arrives(self):
++        passing, thin = self.add(check()), self.add(check("thin"))
++        grown = [r for i in range(6) for r in (row(f"x{i}", "Adam", 1.0, "thin"), row(f"x{i}", "SGD", 2.0, "thin"))]
++        loop.write_jsonl(self.run / "lab_experiments.jsonl", grown)
++        outcome = self.propose({"op": "merge", "claim_ids": [passing, thin], "text": "m", "reason": "fixture"})
++        self.assertNotIn("rejected", outcome)
++
++    def test_revise_cannot_drop_or_weaken_an_inherited_check(self):
++        cid = self.add(check(value=.7))
++        own = self.kb.claims[cid]["checks"][0]["check_id"]
++        self.assertNotIn("rejected", self.propose({"op": "revise", "claim_ids": [cid], "text": "looser", "reason": "fixture",
++                                                   "checks": [{**check(value=.01), "check_id": own}]}))
++        self.assertEqual(sorted(c["value"] for c in self.kb.claims[cid]["checks"]), [.01, .7])
++        self.assertNotIn("rejected", self.propose({"op": "revise", "claim_ids": [cid], "text": "no checks", "reason": "fixture"}))
++        self.assertEqual(len(self.kb.claims[cid]["checks"]), 2)
++
++    def test_revise_with_a_new_failing_check_keeps_the_old_text(self):
++        cid = self.add(check())
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "revise", "claim_ids": [cid], "text": "t", "reason": "fixture", "checks": [check("loses")]})
++        self.assert_rejected_untouched(before, published, outcome, "check failed")
++
++    def test_checks_cannot_arrive_through_fields_annotate_or_delete(self):
++        before, published = self.snapshot()
++        for op in ({"op": "add", "text": "t", "reason": "r", "fields": {"checks": []}},
++                   {"op": "annotate", "claim_ids": ["K1001"], "reason": "r", "fields": {"checks": normal(check())}},
++                   {"op": "annotate", "claim_ids": ["K1001"], "reason": "r", "checks": [check()]},
++                   {"op": "delete", "claim_ids": ["K1001"], "reason": "r", "checks": [check()]},
++                   {"op": "add", "text": "t", "reason": "r", "counterexample_question_ids": ["q"]}):
++            self.assert_rejected_untouched(before, published, self.propose(op), "")
++
++    def test_lab_missing_or_torn_or_absent_is_insufficient_data_not_failure(self):
++        cid, plain = self.add(check()), "K1001"
++        before, published = self.snapshot()
++        merge = {"op": "merge", "claim_ids": [cid, plain], "text": "m", "reason": "fixture"}
++        configured = self.obj.args.lab
++        for lab in (None, str(self.run / "missing.jsonl")):
++            self.obj.args.lab = lab
++            self.assert_rejected_untouched(before, published, self.propose(merge), "insufficient data, not falsified")
++        self.obj.args.lab = configured
++        with (self.run / "lab_experiments.jsonl").open("w") as out:
++            out.write('{"torn": ')
++        self.assert_rejected_untouched(before, published, self.propose(merge), "unreadable")
++
++
++class LegacyTests(GateFixture):
++    def test_claims_without_checks_ignore_the_lab_and_gain_no_field(self):
++        self.obj.args.lab = str(self.run / "does-not-exist.jsonl")
++        outcome = json.loads(self.propose(
++            {"op": "add", "text": "plain", "reason": "same"},
++            {"op": "revise", "claim_ids": ["K1001"], "text": "edited", "reason": "same"},
++            {"op": "merge", "claim_ids": ["K1001", "K1002"], "text": "merged", "reason": "same"}))
++        self.assertEqual(set(outcome), {"submitted", "claim_ids", "report_id"})
++        merged = self.kb.claims[outcome["claim_ids"][2]]
++        self.assertNotIn("checks", merged)
++        for commit in self.kb.pending:
++            if commit["op"] != "proposal":
++                self.assertEqual(commit["reason"], "same")
++                self.assertNotIn("checks", commit.get("payload", {}))
++
++    def test_unset_lab_argument_is_tolerated_for_old_namespaces(self):
++        self.obj.args = SimpleNamespace(model="synthetic-test-model")
++        self.assertNotIn("rejected", self.propose({"op": "add", "text": "plain", "reason": "same"}))
++
++    def test_seed_keeps_checks_and_seeds_without_them_are_unchanged(self):
++        seed = self.run / "seed.json"
++        seed.write_text(json.dumps({"claims": [
++            {"id": "K1", "text": "t", "support_count": 1, "failure_count": 0, "checks": normal(check())},
++            {"id": "K2", "text": "t", "support_count": 1, "failure_count": 0}]}))
++        kb = loop.KB.seed(self.run, seed)
++        self.assertEqual(kb.claims["K1"]["checks"], normal(check()))
++        self.assertNotIn("checks", kb.claims["K2"])
++        seed.write_text(json.dumps({"claims": [{"id": "K1", "text": "t", "support_count": 1, "failure_count": 0,
++                                                "checks": [{"type": "vibes"}]}]}))
++        with self.assertRaisesRegex(ValueError, "seed claim K1"):
++            loop.KB.seed(self.run, seed)
++
++
++class DeleteGateTests(GateFixture):
++    def solve(self, qid, cited=("K1001",), score=0., snapshot="solve_e0001", **extra):
++        return {qid: {"question_id": qid, "cited": list(cited), "score": score, "solver_snapshot": snapshot, **extra}}
++
++    def setUp(self):
++        super().setUp()
++        loop.write_json(self.run / "solver_snapshots/solve_e0001.json", {"claims": [claim()]})
++        loop.write_json(self.run / "solver_snapshots/solve_e0000.json", {"claims": [claim(text="Older wording")]})
++
++    def delete(self, cx=None, history=None, cid="K1001"):
++        op = {"op": "delete", "claim_ids": [cid], "reason": "fixture"}
++        if cx is not None:
++            op["counterexample_question_ids"] = cx
++        return self.propose(op, history=history)
++
++    def test_delete_without_evidence_is_rejected(self):
++        before, published = self.snapshot()
++        self.assert_rejected_untouched(before, published, self.delete(), "deletion needs")
++
++    def test_poor_solver_credit_allows_delete(self):
++        self.kb.claims["K1001"].update(support_count=0., failure_count=5., credibility=1 / 7)
++        self.assertNotIn("rejected", self.delete())
++        self.assertEqual(self.kb.retired[-1]["id"], "K1001")
++
++    def test_two_verified_counterexamples_allow_delete_and_are_logged(self):
++        history = {**self.solve("q1"), **self.solve("q2", score=.5)}
++        self.assertNotIn("rejected", self.delete(["q1", "q2"], history))
++        self.assertIn("counterexamples: ['q1', 'q2']", self.kb.retired[-1]["reason"])
++
++    def test_counterexample_ids_that_merely_exist_are_refused(self):
++        before, published = self.snapshot()
++        cases = {"not in visible history": ({}, ["q1", "q2"]),
++                 "did not cite": ({**self.solve("q1", cited=()), **self.solve("q2")}, ["q1", "q2"]),
++                 "did not lose credit": ({**self.solve("q1", score=1.), **self.solve("q2")}, ["q1", "q2"]),
++                 "another version": ({**self.solve("q1", snapshot="solve_e0000"), **self.solve("q2")}, ["q1", "q2"])}
++        for phrase, (history, ids) in cases.items():
++            self.assert_rejected_untouched(before, published, self.delete(ids, history), phrase)
++
++    def test_the_same_counterexample_named_twice_counts_once(self):
++        before, published = self.snapshot()
++        outcome = self.delete(["q1", "q1"], self.solve("q1"))
++        self.assert_rejected_untouched(before, published, outcome, "deletion needs")
++
++    def test_a_snapshot_that_is_gone_verifies_nothing(self):
++        before, published = self.snapshot()
++        history = {**self.solve("q1", snapshot="missing"), **self.solve("q2", snapshot="missing")}
++        self.assert_rejected_untouched(before, published, self.delete(["q1", "q2"], history), "another version")
++
++    def test_nonlist_counterexamples_are_rejected(self):
++        before, published = self.snapshot()
++        self.assert_rejected_untouched(before, published, self.delete("q1q2", self.solve("q1")), "list of strings")
++
++    def test_a_failing_check_is_evidence_for_delete(self):
++        cid = self.add(check("flips"))
++        loop.write_jsonl(self.lab, lab_rows() + [r for i in range(6) for r in
++                         (row(f"f{i}", "Adam", 2.0, "flips"), row(f"f{i}", "SGD", 1.0, "flips"))])
++        self.assertNotIn("rejected", self.delete(cid=cid))
++        self.assertIn("failed checks", self.kb.retired[-1]["reason"])
++
++    def test_insufficient_data_is_no_evidence_for_delete(self):
++        cid = self.add(check("thin"))
++        before, published = self.snapshot()
++        outcome = self.delete(cid=cid)
++        self.assert_rejected_untouched(before, published, outcome, "insufficient data, not falsified")
++        self.assertIn("deletion needs", outcome)
++
++    def test_a_passing_check_does_not_shield_a_claim_that_misleads_solvers(self):
++        cid = self.add(check())
++        self.kb.claims[cid].update(support_count=0., failure_count=5., credibility=1 / 7)
++        self.assertNotIn("rejected", self.delete(cid=cid))
++
++    def test_deleted_ancestor_keeps_its_checks_for_lineage(self):
++        cid = self.add(check("thin"))
++        self.kb.claims[cid].update(support_count=0., failure_count=5., credibility=1 / 7)
++        self.delete(cid=cid)
++        self.assertEqual(self.kb.retired[-1]["checks"], normal(check("thin")))
++
++
++class PublicationTests(GateFixture):
++    def test_checks_survive_publication_into_the_central_kb(self):
++        central = loop.KB(copy.deepcopy(self.obj.job_base), self.run)
++        first = self.add(check(value=.6))
++        merged = json.loads(self.propose({"op": "merge", "claim_ids": ["K1001", first], "text": "m", "reason": "fixture",
++                                          "checks": [check(value=.7)]}))["claim_ids"][0]
++        self.obj.apply_publications(central, 4)
++        self.assertEqual({c["value"] for c in central.claims[merged]["checks"]}, {.6, .7})
++        self.assertNotIn("K1001", central.claims)
++
++
++def run(group, value, task="t", fit=True, **extra):
++    """One row per run, as in the CPPN/FER experiment tables."""
++    return {"set_id": f"img_{task}", "task": task, "group": group, "fit": fit, "m": value, **extra}
++
++
++def ratio(cid="c_ratio", group_a="A", group_b="B", ok=.5, bad=1.0, min_n=3, **extra):
++    return {"check_id": cid, "type": "ratio", "metric": "m", "where": {"task": "t"}, "group_a": group_a, "group_b": group_b,
++            "min_n": min_n, "pass": {"op": "<=", "value": ok}, "fail": {"op": ">=", "value": bad}, **extra}
++
++
++def position(cid="c_position", **extra):
++    return {"check_id": cid, "type": "position", "metric": "m", "where": {"task": "t"}, "low_group": "L", "high_group": "H",
++            "test_group": "T", "min_n": 2, "pass": {"op": ">=", "value": .7}, "fail": {"op": "<=", "value": .3}, **extra}
++
++
++def count(cid="c_count", **extra):
++    return {"check_id": cid, "type": "count", "where": {"group": "G", "fit": True}, "where_total": {"group": "G"},
++            "min_total": 3, "op": ">=", "value": 2, **extra}
++
++
++def ratio_rows(a, b, n=3):
++    return [run("A", a) for _ in range(n)] + [run("B", b) for _ in range(n)]
++
++
++class TableReplayTests(unittest.TestCase):
++    def state(self, c, rows):
++        return run_check(normal(c)[0], rows)[0]
++
++    def test_ratio_has_four_outcomes(self):
++        self.assertEqual(self.state(ratio(), ratio_rows(.4, 1.)), PASS)
++        self.assertEqual(self.state(ratio(), ratio_rows(1., 1.)), FAIL)
++        self.assertEqual(self.state(ratio(), ratio_rows(.7, 1.)), BAND)
++        self.assertEqual(self.state(ratio(), ratio_rows(.4, 1., n=2)), NODATA)
++        self.assertEqual(self.state(ratio(), ratio_rows(.4, 0.)), NODATA)
++        self.assertEqual(self.state(ratio(), ratio_rows(.4, 1.)[1:]), NODATA)  # thin on the A side only
++        self.assertEqual(self.state(ratio(), ratio_rows(.4, 1.)[:-1]), NODATA)  # thin on the B side only
++
++    def test_ratio_default_min_n_is_two(self):
++        c = {k: v for k, v in ratio().items() if k != "min_n"}
++        self.assertEqual(self.state(c, ratio_rows(.4, 1., n=2)), PASS)
++        self.assertEqual(self.state(c, ratio_rows(.4, 1., n=1)), NODATA)
++
++    def test_ratio_uses_medians_and_only_rows_in_where(self):
++        rows = [run("A", v) for v in (.1, .4, 100.)] + [run("B", 1.) for _ in range(3)] + [run("A", 50., task="other")] * 9
++        self.assertEqual(self.state(ratio(), rows), PASS)
++
++    def test_position_has_four_outcomes_and_uses_fitted_rows_only(self):
++        refs = [run("L", 0.), run("H", 1.)]
++        for value, want in ((.8, PASS), (.2, FAIL), (.5, BAND)):
++            self.assertEqual(self.state(position(), refs + [run("T", value), run("T", value)]), want)
++        self.assertEqual(self.state(position(), refs + [run("T", 0.), run("T", 0., fit=False)]), NODATA)
++        self.assertEqual(self.state(position(), [run("L", 1.), run("H", 1.), run("T", 1.), run("T", 1.)]), NODATA)
++
++    def test_position_test_where_restricts_only_the_test_group(self):
++        rows = [run("L", 0., batch="old"), run("H", 1., batch="old"), run("T", 0., batch="old"),
++                run("T", .9, batch="new"), run("T", .9, batch="new")]
++        self.assertEqual(self.state(position(test_where={"batch": "new"}), rows), PASS)
++        self.assertEqual(self.state(position(test_where={"batch": "new"}, min_n=3), rows), NODATA)
++
++    def test_count_needs_enough_runs_before_it_can_fail(self):
++        fitted = [run("G", 1.), run("G", 1.), run("G", 1., fit=False)]
++        self.assertEqual(self.state(count(), fitted), PASS)
++        self.assertEqual(self.state(count(), [run("G", 1.), run("G", 1., fit=False), run("G", 1., fit=False)]), FAIL)
++        self.assertEqual(self.state(count(), fitted[:2]), NODATA)
++
++    def test_verdict_precedence_matches_the_registered_statuses(self):
++        self.assertEqual(verdict([(PASS, ""), (NODATA, ""), (FAIL, "")]), "FALSIFIED")
++        self.assertEqual(verdict([(PASS, ""), (NODATA, ""), (BAND, "")]), "INCONCLUSIVE")
++        self.assertEqual(verdict([(PASS, ""), (BAND, "")]), "MIXED")
++        self.assertEqual(verdict([(PASS, "")]), "VERIFIED")
++
++    def test_registered_shape_is_accepted_verbatim_and_keeps_its_name(self):
++        stored = normal(ratio("c011_f_skull"), position("c002"), count("c001"))
++        self.assertEqual([c["label"] for c in stored], ["c011_f_skull", "c002", "c001"])
++        self.assertEqual({c["source"] for c in stored}, {"table"})
++        self.assertTrue(all(c["check_id"].startswith("C") for c in stored))
++        self.assertEqual(normal(*stored), stored)
++        self.assertIn("c011_f_skull", run_check(stored[0], ratio_rows(.4, 1.))[1])
++
++    def test_renaming_a_registered_check_cannot_change_its_identity(self):
++        self.assertEqual(normal(ratio("first")), normal(ratio("first"), ratio("second")))
++        self.assertNotEqual(normal(ratio("same"))[0]["check_id"], normal(ratio("same", ok=.9))[0]["check_id"])
++
++    def test_malformed_table_checks_are_rejected(self):
++        without_pass = {k: v for k, v in ratio().items() if k != "pass"}
++        for bad in (without_pass, ratio(group_b="A"), ratio(min_n=0), ratio(min_n=True), ratio(extra=1), ratio(metric=""),
++                    ratio(where=None), ratio(check_id=""), ratio(source="elsewhere"),
++                    dict(ratio(), **{"pass": {"op": "<=", "value": 2.}}),
++                    dict(ratio(), **{"fail": {"op": "<=", "value": 1.}}),
++                    dict(ratio(), **{"fail": {"op": "==", "value": 1.}}),
++                    position(high_group="L"), position(test_where=None), count(min_total=0), count(where_total=None),
++                    count(op="=="), count(value="many")):
++            self.assertIsNotNone(normalize_checks([bad])[1], bad)
++
++    def test_group_comparisons_cannot_read_the_lab_because_they_would_cross_set_ids(self):
++        self.assertIn("source", normalize_checks([ratio(source="lab")])[1])
++        self.assertIn("source", normalize_checks([position(source="lab")])[1])
++        self.assertEqual(normal(count(source="lab"))[0]["source"], "lab")
++        self.assertEqual(normal(check(source="table"))[0]["source"], "table")
++
++
++class TableGateTests(GateFixture):
++    def setUp(self):
++        super().setUp()
++        self.first, self.second = self.run / "lab/first.jsonl", self.run / "lab/second.jsonl"
++        self.obj.args.check_table = [str(self.first), str(self.second)]
++
++    def table(self, rows, path=None):
++        loop.write_jsonl(path or self.first, rows)
++
++    def test_tables_are_concatenated_and_a_table_not_written_yet_is_no_data(self):
++        self.table([run("A", .4) for _ in range(3)])
++        outcome = json.loads(self.propose({"op": "add", "text": "t", "reason": "r", "checks": [ratio()]}))
++        self.assertIn("insufficient data, not falsified", outcome["checks_pending"]["K1002"])
++        self.table([run("B", 1.) for _ in range(3)], self.second)
++        self.assertNotIn("rejected", self.propose({"op": "revise", "claim_ids": ["K1002"], "text": "t2", "reason": "r"}))
++
++    def test_a_same_size_rewrite_with_the_same_timestamp_is_still_seen(self):
++        self.table(ratio_rows(.4, 1.))
++        check_, = normal(ratio())
++        self.assertEqual(self.obj.replay_checks([check_])[0][0][0], PASS)
++        stamp = self.first.stat()
++        self.table(ratio_rows(.7, 1.))
++        os.utime(self.first, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
++        self.assertEqual(self.first.stat().st_size, stamp.st_size)
++        self.assertEqual(self.obj.replay_checks([check_])[0][0][0], BAND)
++
++    def test_add_outcomes_for_each_result(self):
++        self.table(ratio_rows(1., 1.))
++        before, published = self.snapshot()
++        self.assert_rejected_untouched(before, published, self.propose(
++            {"op": "add", "text": "t", "reason": "r", "checks": [ratio()]}), "check failed")
++        self.table(ratio_rows(.7, 1.))
++        outcome = json.loads(self.propose({"op": "add", "text": "t", "reason": "r", "checks": [ratio()]}))
++        self.assertIn("mixed result, not falsified", outcome["checks_pending"]["K1002"])
++        self.assertIn("verdict MIXED", next(c for c in self.kb.pending if c["op"] == "add")["reason"])
++
++    def test_mixed_blocks_merge_and_revise_but_is_not_a_failure(self):
++        self.table(ratio_rows(.7, 1.))
++        cid = self.add(ratio())
++        before, published = self.snapshot()
++        for op in ({"op": "revise", "claim_ids": [cid], "text": "t", "reason": "r"},
++                   {"op": "merge", "claim_ids": [cid, "K1001"], "text": "t", "reason": "r"}):
++            outcome = self.propose(op)
++            self.assert_rejected_untouched(before, published, outcome, "mixed result, not falsified")
++            self.assertNotIn("check failed", outcome)
++
++    def test_mixed_is_no_evidence_for_delete_but_a_failure_is(self):
++        self.table(ratio_rows(.7, 1.))
++        cid = self.add(ratio())
++        before, published = self.snapshot()
++        outcome = self.propose({"op": "delete", "claim_ids": [cid], "reason": "r"})
++        self.assert_rejected_untouched(before, published, outcome, "mixed result, not falsified")
++        self.table(ratio_rows(2., 1.))
++        self.assertNotIn("rejected", self.propose({"op": "delete", "claim_ids": [cid], "reason": "r"}))
++        self.assertIn("failed checks: c_ratio", self.kb.retired[-1]["reason"])
++
++    def test_merge_inherits_table_and_lab_checks_and_replays_each_on_its_own_source(self):
++        self.table(ratio_rows(.4, 1.))
++        table_claim, lab_claim = self.add(ratio()), self.add(check())
++        merged = json.loads(self.propose({"op": "merge", "claim_ids": [table_claim, lab_claim], "text": "m", "reason": "r"}))
++        stored = self.kb.claims[merged["claim_ids"][0]]
++        self.assertEqual({c["source"] for c in stored["checks"]}, {"lab", "table"})
++        reason = next(c for c in self.kb.pending if c["op"] == "merge")["reason"]
++        self.assertRegex(reason, r"2 passed \(verdict VERIFIED; lab=\w+ table=\w+\)")
++
++    def test_sources_do_not_leak_into_each_other(self):
++        self.table(lab_rows())  # paired rows in the table must not satisfy a check that reads the lab, and vice versa
++        loop.write_jsonl(self.lab, ratio_rows(.4, 1.))
++        lab_check, table_check = normal(check())[0], normal(ratio())[0]
++        results, _ = self.obj.replay_checks([lab_check, table_check])
++        self.assertEqual([state for state, _ in results], [NODATA, NODATA])
++        results, _ = self.obj.replay_checks(normal(check(source="table")))
++        self.assertEqual(results[0][0], PASS)
++
++    def test_no_table_configured_or_torn_table_is_insufficient_data(self):
++        self.obj.args.check_table = []
++        outcome = json.loads(self.propose({"op": "add", "text": "t", "reason": "r", "checks": [ratio()]}))
++        self.assertIn("no table database configured", outcome["checks_pending"]["K1002"])
++        self.obj.args.check_table = [str(self.first)]
++        self.first.parent.mkdir(exist_ok=True)
++        self.first.write_text('{"torn": ')
++        outcome = json.loads(self.propose({"op": "add", "text": "t", "reason": "r", "checks": [ratio("other", ok=.4)]}))
++        self.assertIn("table database unreadable", outcome["checks_pending"]["K1003"])
++
++
++FAKE = r'''#!/usr/bin/env python3
++import json, os, re, sys, urllib.request, uuid
++from pathlib import Path
++args = sys.argv[1:]
++sys.stdin.read()
++codex = Path(sys.argv[0]).name == "codex"
++def emit(event):
++    print(json.dumps(event), flush=True)
++if codex:
++    cfg = (Path(os.environ["CODEX_HOME"]) / "config.toml").read_text()
++    url = re.search(r"http://127[.]0[.]0[.]1:[0-9]+/", cfg).group(0)
++    sid = args[2] if args[:2] == ["exec", "resume"] else str(uuid.uuid4())
++    emit({"type": "thread.started", "thread_id": sid})
++else:
++    cfg = json.loads(Path(args[args.index("--mcp-config") + 1]).read_text())
++    url = cfg["mcpServers"]["kb"]["args"][-1]
++    flag = next((f for f in ("--resume", "--session-id") if f in args), None)
++    sid = args[args.index(flag) + 1] if flag else str(uuid.uuid4())
++    emit({"type": "system", "subtype": "init", "session_id": sid})
++root = Path(os.environ["FAKE_ROOT"])
++outcomes = []
++for name, values in json.loads((root / "script.json").read_text()):
++    if not codex:
++        emit({"type": "assistant", "message": {"id": name, "content": [
++            {"type": "tool_use", "id": name, "name": "mcp__kb__" + name, "input": values}]}})
++    body = json.dumps({"name": name if codex else "mcp__kb__" + name, "arguments": values}).encode()
++    with urllib.request.urlopen(urllib.request.Request(url, body), timeout=10) as response:
++        answer = response.read().decode()
++    emit({"type": "item.completed", "item": {"type": "mcp_tool_call", "result": answer}})
++    outcomes.append(answer)
++(root / "outcomes.json").write_text(json.dumps(outcomes))
++if Path("_tools.json").exists():
++    (root / "tools.json").write_text(Path("_tools.json").read_text())
++final = "<report># Synthetic report\nFixture only.</report>"
++if codex:
++    emit({"type": "item.completed", "item": {"type": "agent_message", "text": final}})
++    emit({"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}})
++else:
++    emit({"type": "result", "result": final, "is_error": False, "session_id": sid,
++          "total_cost_usd": .01, "usage": {"input_tokens": 1}, "num_turns": 1})
++'''
++
++
++class FakeCliTests(unittest.TestCase):
++    """Tool calls travel the real path: fake CLI process -> MCP bridge -> curate / propose_changes handler."""
++
++    def setUp(self):
++        self.temp = tempfile.TemporaryDirectory()
++        self.root = Path(self.temp.name).resolve()
++        binary = self.root / "bin"
++        binary.mkdir()
++        for name in ("claude", "codex"):
++            target = binary / name
++            target.write_text(FAKE.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1))
++            target.chmod(0o755)
++        self.keys = self.root / "keys.json"
++        self.keys.write_text(json.dumps({p: {"api_key": "unused-fixture", "base_url": "http://localhost.invalid"}
++                                         for p in ("vapi", "cctq", "cctq_claude")}))
++        questions = [{"question_id": f"{source}_{i}", "source": source, "group": f"{source}_group_{i}",
++                      "family": "synthetic_test_only", "type": "mlp",
++                      "task": "ranking" if source.startswith("ranking") else "select",
++                      "num_choices": 5 if source.startswith("ranking") else 3,
++                      "answer": "A<B<C<D<E" if source.startswith("ranking") else "A",
++                      "messages": [{"role": "user", "content": "Synthetic runtime fixture only."}],
++                      "meta": {"gate": "synthetic_test_only"}} for source in release.SOURCES for i in range(12)]
++        raw = self.root / "synthetic.jsonl"
++        raw.write_text("".join(json.dumps(q) + "\n" for q in questions))
++        pool = self.root / "release"
++        release.build({s: raw for s in release.SOURCES}, {s: 8 for s in release.SOURCES}, [],
++                      pool, seed=12, val_fraction=0, test_fraction=0, name="synthetic_test_only")
++        seed = self.root / "seed.json"
++        seed.write_text(json.dumps({"claims": [{"id": "K1001", "text": "Synthetic seed observation",
++                                                "support_count": 3, "failure_count": 1}]}))
++        self.lab = self.root / "lab/lab_db.jsonl"
++        loop.write_jsonl(self.lab, lab_rows())
++        self.patches = [patch.object(loop, "KEYS", self.keys), patch.object(cc_agent, "KEYS", self.keys),
++                        patch.object(codex_agent, "KEYS", self.keys), patch.object(loop, "OUT_ROOT", self.root / "runs"),
++                        patch.dict(os.environ, {"PATH": str(binary) + os.pathsep + os.environ["PATH"],
++                                                "FAKE_ROOT": str(self.root), "AIQ_KB_DATA_ROOT": str(self.root),
++                                                "AIQ_KB_KEYS": str(self.keys)})]
++        for value in self.patches:
++            value.start()
++        self.common = ["--run-name", "synthetic_test_only", "--pool", str(pool / "questions.jsonl"), "--seed-kb", str(seed),
++                       "--batch-size", "4", "--epochs", "2", "--concurrency", "1", "--no-eval", "--model", "fixture-model",
++                       "--science", "--render", "brief", "--test-repeats", "0", "--max-add", "8"]
++
++    def tearDown(self):
++        for value in reversed(self.patches):
++            value.stop()
++        self.temp.cleanup()
++
++    def script(self, *calls):
++        (self.root / "script.json").write_text(json.dumps(calls))
++
++    def outcomes(self):
++        return json.loads((self.root / "outcomes.json").read_text())
++
++    def records(self, obj, kb):
++        """q0 and q1 are real counterexamples to K1001; q2 solved fine while citing it; q3 never cited it."""
++        loop.write_json(obj.run / "solver_snapshots/solve_e0001.json", kb.to_doc())
++        ids = sorted(obj.pool)[:4]
++        return [{"question_id": qid, "source": obj.pool[qid]["source"], "family": "synthetic_test_only", "task": "select",
++                 "epoch": 1, "answer": "A", "prediction": "B", "score": score, "cited": cited, "explanation": "Synthetic",
++                 "comment": "Synthetic", "hypothesis": None, "solver_snapshot": "solve_e0001"}
++                for qid, score, cited in zip(ids, (0., 0., 1., 0.), (["K1001"], ["K1001"], ["K1001"], []))], ids
++
++    def test_curator_tool_calls_pass_through_every_gate(self):
++        with patch.object(sys, "argv", ["loop", *self.common, "--summ-backend", "claude_code", "--lab", str(self.lab)]):
++            args = loop.parse()
++        obj = loop.Loop(args)
++        kb = obj.load_kb()
++        kb.epoch = 1
++        records, ids = self.records(obj, kb)
++        vis = obj.visible("fake_cli_curator", records, kb)
++        self.script(
++            ["add_claim", {"text": "passes", "source_question_ids": [], "reason": "r", "checks": [check(value=.6)],
++                           "mechanism": "kept alongside checks"}],
++            ["add_claim", {"text": "fails", "source_question_ids": [], "reason": "r", "checks": [check("loses")]}],
++            ["add_claim", {"text": "thin", "source_question_ids": [], "reason": "r", "checks": [check("thin")]}],
++            ["add_claim", {"text": "legacy", "source_question_ids": [], "reason": "r"}],
++            ["add_claim", {"text": "passes too", "source_question_ids": [], "reason": "r", "checks": [check(value=.7)]}],
++            ["merge_claims", {"claim_ids": ["K1002", "K1003"], "text": "thin merge", "reason": "r"}],
++            ["merge_claims", {"claim_ids": ["K1002", "K1004", "K1005"], "text": "fused", "reason": "r"}],
++            ["merge_claims", {"claim_ids": ["K1006"], "text": "bad revise", "reason": "r", "checks": [check("loses")]}],
++            ["merge_claims", {"claim_ids": ["K1006"], "text": "drops nothing", "reason": "r"}],
++            ["delete_claim", {"claim_id": "K1001", "reason": "r", "counterexample_question_ids": [ids[2], ids[3]]}],
++            ["delete_claim", {"claim_id": "K1003", "reason": "r"}],
++            ["delete_claim", {"claim_id": "K1001", "reason": "r", "counterexample_question_ids": [ids[0], ids[1]]}],
++            ["finish", {"science": "Synthetic curation complete"}])
++        obj.summarize(1, kb, records, vis)
++        out = self.outcomes()
++        self.assertRegex(out[0], r"^added K1002; checks: 1 passed")
++        self.assertRegex(out[1], r"^rejected: check failed")
++        self.assertRegex(out[2], r"^added K1003; checks: 0 passed, pending on insufficient data, not falsified")
++        self.assertEqual(out[3], "added K1004")
++        self.assertRegex(out[4], r"^added K1005; checks: 1 passed")
++        self.assertRegex(out[5], r"^rejected: insufficient data, not falsified")
++        self.assertRegex(out[6], r"^merged into K1006 .*checks: 2 passed")
++        self.assertRegex(out[7], r"^rejected: check failed")
++        self.assertRegex(out[8], r"^merged into K1006 .*checks: 2 passed")
++        self.assertRegex(out[9], r"^rejected: K1001 .*did not lose credit.*did not cite")
++        self.assertRegex(out[10], r"^rejected: K1003 .*insufficient data, not falsified")
++        self.assertEqual(out[11], "deleted K1001")
++        self.assertEqual({c["value"] for c in kb.claims["K1006"]["checks"]}, {.6, .7})
++        self.assertEqual(kb.claims["K1006"]["text"], "drops nothing")
++        self.assertIn("K1003", kb.claims)
++        retired = {r["id"]: r for r in kb.retired}
++        self.assertEqual(retired["K1002"]["mechanism"], "kept alongside checks")
++        self.assertEqual(retired["K1001"]["reason"], f"r | counterexamples: {[ids[0], ids[1]]}")
++        tools = {t["function"]["name"]: t["function"]["parameters"]["properties"]
++                 for t in json.loads((self.root / "tools.json").read_text())}
++        self.assertIn("checks", tools["add_claim"])
++        self.assertIn("checks", tools["merge_claims"])
++
++    def test_curator_without_a_lab_is_not_offered_checks_and_keeps_old_answers(self):
++        with patch.object(sys, "argv", ["loop", *self.common, "--summ-backend", "claude_code"]):
++            args = loop.parse()
++        obj = loop.Loop(args)
++        kb = obj.load_kb()
++        kb.epoch = 1
++        vis = obj.visible("fake_cli_nolab", [], kb)
++        self.script(["add_claim", {"text": "legacy", "source_question_ids": [], "reason": "r"}],
++                    ["merge_claims", {"claim_ids": ["K1001", "K1002"], "text": "legacy merge", "reason": "r"}],
++                    ["finish", {"science": "Synthetic curation complete"}])
++        obj.summarize(1, kb, [], vis)
++        self.assertEqual(self.outcomes()[:2], ["added K1002", "merged into K1003 (s=3.00, f=1.00)"])
++        self.assertNotIn("checks", kb.claims["K1003"])
++        tools = {t["function"]["name"]: t["function"]["parameters"]["properties"]
++                 for t in json.loads((self.root / "tools.json").read_text())}
++        self.assertNotIn("checks", tools["add_claim"])
++
++    def test_curator_with_tables_only_is_offered_checks_and_they_replay_on_the_tables(self):
++        table = self.root / "continual_db.jsonl"
++        loop.write_jsonl(table, ratio_rows(.7, 1.))
++        with patch.object(sys, "argv", ["loop", *self.common, "--summ-backend", "claude_code", "--check-table", str(table)]):
++            args = loop.parse()
++        obj = loop.Loop(args)
++        kb = obj.load_kb()
++        kb.epoch = 1
++        vis = obj.visible("fake_cli_tables", [], kb)
++        self.script(["add_claim", {"text": "mixed", "source_question_ids": [], "reason": "r", "checks": [ratio("c011_f_skull")]}],
++                    ["merge_claims", {"claim_ids": ["K1001", "K1002"], "text": "merged", "reason": "r"}],
++                    ["add_claim", {"text": "lab not configured", "source_question_ids": [], "reason": "r", "checks": [check()]}],
++                    ["finish", {"science": "Synthetic curation complete"}])
++        obj.summarize(1, kb, [], vis)
++        out = self.outcomes()
++        self.assertRegex(out[0], r"^added K1002; checks: 0 passed, pending on mixed result, not falsified: c011_f_skull")
++        self.assertRegex(out[1], r"^rejected: mixed result, not falsified: c011_f_skull")
++        self.assertRegex(out[2], r"no lab database configured")
++        self.assertEqual(kb.claims["K1002"]["checks"][0]["label"], "c011_f_skull")
++        tools = {t["function"]["name"]: t["function"]["parameters"]["properties"]
++                 for t in json.loads((self.root / "tools.json").read_text())}
++        self.assertIn("checks", tools["add_claim"])
++
++    def test_researcher_proposals_pass_through_every_gate_and_reach_the_central_kb(self):
++        with patch.object(sys, "argv", ["loop", *self.common, "--summ-backend", "codex", "--async-agents",
++                                        "--agent-timeout", ".2"]):
++            args = loop.parse()
++        obj = loop.Loop(args)
++        args.lab = str(self.lab)  # the allowlist check at startup concerns real pools; this lab is synthetic
++        kb = obj.load_kb()
++        kb.epoch = 1
++        central = loop.KB(copy.deepcopy(kb.to_doc()), obj.run)
++        records, ids = self.records(obj, kb)
++        vis = obj.visible("fake_cli_research", records, kb)
++        job = obj.jobs.submit("research", 1, {"topic": "fixture-topic", "question": "q", "kb": kb.to_doc(), "vis_dir": str(vis)})
++        obj.worker_job, obj.worker_path = job, Path(job["path"])
++        obj.job_base = copy.deepcopy(kb.to_doc())
++        kb.publish_commit = obj.journal_commit
++        self.script(
++            ["propose_changes", {"operations": [
++                {"op": "add", "text": "good", "reason": "r", "checks": [check()]},
++                {"op": "add", "text": "bad", "reason": "r", "checks": [check("loses")]}]}],
++            ["propose_changes", {"operations": [
++                {"op": "add", "text": "thin", "reason": "r", "checks": [check("thin")]},
++                {"op": "add", "text": "good", "reason": "r", "checks": [check()]}]}],
++            ["propose_changes", {"operations": [
++                {"op": "merge", "claim_ids": ["K1002", "K1003"], "text": "thin merge", "reason": "r"}]}],
++            ["propose_changes", {"operations": [
++                {"op": "delete", "claim_ids": ["K1001"], "reason": "r"}]}],
++            ["propose_changes", {"operations": [
++                {"op": "delete", "claim_ids": ["K1001"], "reason": "r", "counterexample_question_ids": [ids[2], ids[3]]}]}],
++            ["propose_changes", {"operations": [
++                {"op": "delete", "claim_ids": ["K1001"], "reason": "r", "counterexample_question_ids": [ids[0], ids[1]]}]}],
++            ["propose_changes", {"operations": [
++                {"op": "revise", "claim_ids": ["K1003"], "text": "still good", "reason": "r", "checks": [check(value=.6)]}]}])
++        obj.research(1, 1, "q", "", vis, kb)
++        out = self.outcomes()
++        self.assertRegex(out[0], r"^rejected: check failed")
++        self.assertEqual(json.loads(out[1])["claim_ids"], ["K1002", "K1003"])
++        self.assertIn("K1002", json.loads(out[1])["checks_pending"])
++        self.assertRegex(out[2], r"^rejected: insufficient data, not falsified")
++        self.assertRegex(out[3], r"^rejected: K1001 has evidence 4.0")
++        self.assertRegex(out[4], r"^rejected: K1001 .*did not lose credit.*did not cite")
++        self.assertEqual(json.loads(out[5])["submitted"], 1)
++        self.assertEqual(json.loads(out[6])["claim_ids"], ["K1003"])
++        self.assertEqual(obj.apply_publications(central, 2)[:1], [f"{job['id']}:000001"])
++        self.assertEqual(central.claims["K1002"]["checks"], normal(check("thin")))
++        self.assertEqual({c["value"] for c in central.claims["K1003"]["checks"]}, {.6, .7})
++        self.assertNotIn("K1001", central.claims)
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.43.0
+

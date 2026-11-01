@@ -1,0 +1,15 @@
+start 17:15:03 commit 61a020c
+skull replay 0 {"metric": "forget", "mean": 0.200105, "std": 0.06687673848207613, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.0007700000000000001, "background": 0.350725, "secs": 22.1}
+skull replay 0.05 {"metric": "forget", "mean": 0.174265, "std": 0.022692884469708893, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.00193, "background": 0.133465, "secs": 17.8}
+skull replay 0.2 {"metric": "forget", "mean": 0.13366, "std": 0.015172970118675579, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.003375, "background": 0.053685, "secs": 19.4}
+skull replay 1 {"metric": "forget", "mean": 0.010695, "std": 0.0011681989937030802, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.00292, "background": 0.005785, "secs": 17.8}
+butterfly replay 0 {"metric": "forget", "mean": 0.21341, "std": 0.020087446079579165, "n_seeds": 5, "seeds": [1, 2, 3, 5, 8], "n_rows": 80, "n_learned": 80, "R_after": 0.0076, "background": 0.95492, "secs": 40.1}
+butterfly replay 0.05 {"metric": "forget", "mean": 0.18686999999999998, "std": 0.0237232922251529, "n_seeds": 5, "seeds": [1, 2, 3, 5, 8], "n_rows": 80, "n_learned": 80, "R_after": 0.00566, "background": 0.067465, "secs": 40.8}
+butterfly replay 0.2 {"metric": "forget", "mean": 0.123665, "std": 0.014930575474508673, "n_seeds": 5, "seeds": [1, 2, 3, 5, 8], "n_rows": 80, "n_learned": 80, "R_after": 0.0076749999999999995, "background": 0.033835000000000004, "secs": 41.3}
+butterfly replay 1 {"metric": "forget", "mean": 0.005775000000000001, "std": 0.00042699648710498765, "n_seeds": 5, "seeds": [1, 2, 3, 5, 8], "n_rows": 80, "n_learned": 80, "R_after": 0.012835, "background": 0.00613, "secs": 40.1}
+apple replay 0 {"metric": "forget", "mean": 0.047380000000000005, "std": 0.0043104549901631295, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.0008049999999999999, "background": 0.490625, "secs": 60.8}
+apple replay 0.05 {"metric": "forget", "mean": 0.16756, "std": 0.010027748445632688, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.00235, "background": 0.03486, "secs": 60.9}
+apple replay 0.2 {"metric": "forget", "mean": 0.036045, "std": 0.0029143352586825026, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.07955, "background": 0.004965000000000001, "secs": 61.8}
+apple replay 1 {"metric": "forget", "mean": 0.00213, "std": 0.0017880172134393884, "n_seeds": 3, "seeds": [0, 1, 2], "n_rows": 48, "n_learned": 48, "R_after": 0.07979, "background": 0.0019950000000000002, "secs": 62.3}
+run finished rc=0 17:24:55
+settle rc=0
