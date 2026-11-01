@@ -97,3 +97,5 @@ for task in TASKS:
             med = lambda k: st.median(r[k] for r in rows)
             print(f"{task:10s} {group:5s} {'st' if straight else 'hard':4s} {len(rows):2d}  {med('R'):.4f}  {med('F'):.4f}  "
                   f"{med('s_clip'):.2f}  {med('v_clip'):.2f}", flush=True)
+            if 'detail' in sys.argv:
+                print('  R', sorted(round(r['R'], 4) for r in rows), '\n  F', sorted(round(r['F'], 4) for r in rows), flush=True)

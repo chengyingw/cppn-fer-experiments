@@ -1,0 +1,3 @@
+task       group  mode  n   R500    F500    s_clip  v_clip
+apple      PBd   st    4  0.0139  0.0192  0.00  0.43
+apple      G0    st   12  0.0217  0.0251  0.28  0.00
