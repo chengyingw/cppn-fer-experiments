@@ -1312,7 +1312,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-012": {
   "claim_id": "C-012",
@@ -1450,7 +1450,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-013": {
   "claim_id": "C-013",
@@ -1525,7 +1525,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-014": {
   "claim_id": "C-014",
@@ -1600,7 +1600,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-015": {
   "claim_id": "C-015",
@@ -1738,7 +1738,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-016": {
   "claim_id": "C-016",
@@ -1876,7 +1876,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-017": {
   "claim_id": "C-017",
@@ -1951,7 +1951,7 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  },
  "C-018": {
   "claim_id": "C-018",
@@ -2026,6 +2026,6 @@
    }
   ],
   "parents": [],
-  "status": "INCONCLUSIVE"
+  "status": "FALSIFIED"
  }
 }
