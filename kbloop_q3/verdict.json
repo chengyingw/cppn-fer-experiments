@@ -1,0 +1,154 @@
+{
+ "table_sha256": "aaef102b574d",
+ "rows": 1632,
+ "claims": [
+  {
+   "id": "K9201",
+   "verdict": "FALSIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim, the hypothesis under test, which the author expects to fail: at no replay PBd forgets at most half of what G0 forgets on every task; a ratio >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "pbd_forget_skull: ratio=0.913 (PBd_r0_st=0.2095, G0_r0_st=0.2294)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_butterfly: ratio=1.013 (PBd_r0_st=0.2682, G0_r0_st=0.2648)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_apple: ratio=1.690 (PBd_r0_st=0.173, G0_r0_st=0.1024)"
+    }
+   ]
+  },
+  {
+   "id": "K9202",
+   "verdict": "FALSIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim: the same holds relative to what each disc had left to lose, since a network that learned a disc less well has less room to forget it: forget_rel ratio at most 0.5; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "pbd_forget_rel_skull: ratio=0.914 (PBd_r0_st=0.21, G0_r0_st=0.2298)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_rel_butterfly: ratio=1.022 (PBd_r0_st=0.2743, G0_r0_st=0.2683)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_rel_apple: ratio=1.640 (PBd_r0_st=0.1765, G0_r0_st=0.1076)"
+    }
+   ]
+  },
+  {
+   "id": "K9203",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim, the condition for reading K9201: PBd learns each disc, median R_after at most 0.1; >= 0.3 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "pbd_learns_skull: median=0.011 (PBd_r0_st)"
+    },
+    {
+     "state": "PASS",
+     "message": "pbd_learns_butterfly: median=0.025 (PBd_r0_st)"
+    },
+    {
+     "state": "PASS",
+     "message": "pbd_learns_apple: median=0.043 (PBd_r0_st)"
+    }
+   ]
+  },
+  {
+   "id": "K9204",
+   "verdict": "FALSIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim: with only the evolved edges free, PBa forgets at most half of what G0 forgets; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pba_forget_skull: ratio=1.858 (PBa_r0_st=0.4262, G0_r0_st=0.2294)"
+    },
+    {
+     "state": "BAND",
+     "message": "pba_forget_butterfly: ratio=0.564 (PBa_r0_st=0.1493, G0_r0_st=0.2648)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pba_forget_apple: ratio=5.524 (PBa_r0_st=0.5656, G0_r0_st=0.1024)"
+    }
+   ]
+  },
+  {
+   "id": "K9205",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim, the condition for reading K9204: PBa learns each disc, median R_after at most 0.1; >= 0.3 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "pba_learns_skull: median=0.017 (PBa_r0_st)"
+    },
+    {
+     "state": "PASS",
+     "message": "pba_learns_butterfly: median=0.075 (PBa_r0_st)"
+    },
+    {
+     "state": "PASS",
+     "message": "pba_learns_apple: median=0.007 (PBa_r0_st)"
+    }
+   ]
+  },
+  {
+   "id": "K9206",
+   "verdict": "FALSIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim, from C-022: at no replay PBd moves regions never edited at least twice as much as G0; <= 1 falsifies.",
+   "checks": [
+    {
+     "state": "BAND",
+     "message": "pbd_background_skull: ratio=1.005 (PBd_r0_st=0.4286, G0_r0_st=0.4266)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_background_butterfly: ratio=0.862 (PBd_r0_st=0.9048, G0_r0_st=1.05)"
+    },
+    {
+     "state": "BAND",
+     "message": "pbd_background_apple: ratio=1.072 (PBd_r0_st=0.5081, G0_r0_st=0.4741)"
+    }
+   ]
+  },
+  {
+   "id": "K9207",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim, from K9101: focusing half of a 5% budget on earlier discs helps PBd too: forget at most 0.6 of uniform replay; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "pbd_focus_skull: ratio=0.196 (PBd_r0.05_focus0.5_st=0.04807, PBd_r0.05_st=0.2455)"
+    },
+    {
+     "state": "PASS",
+     "message": "pbd_focus_butterfly: ratio=0.294 (PBd_r0.05_focus0.5_st=0.05121, PBd_r0.05_st=0.1741)"
+    },
+    {
+     "state": "PASS",
+     "message": "pbd_focus_apple: ratio=0.144 (PBd_r0.05_focus0.5_st=0.02379, PBd_r0.05_st=0.1651)"
+    }
+   ]
+  },
+  {
+   "id": "K9208",
+   "verdict": "FALSIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, at the training learning rate. PBd starts from the single Picbreeder network of each image with every weight free, PBa with only its existing edges free, G0 from fully fitted dense networks. Straight-through keeps the gradient at the output clipping, so the trap on apple does not apply. Informed by single-edit tests in which Picbreeder disturbed more, so not blind. The Picbreeder rows of a task come from one network, so these describe that network, not Picbreeder networks in general. Claim: K9201 does not depend on straight-through where clipping is not the problem: with the original output, PBd forgets at most half of what G0 forgets on skull and butterfly; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_hard_skull: ratio=1.280 (PBd_r0=0.2562, replay0=0.2001)"
+    },
+    {
+     "state": "FAIL",
+     "message": "pbd_forget_hard_butterfly: ratio=1.340 (PBd_r0=0.2861, replay0=0.2134)"
+    }
+   ]
+  }
+ ]
+}
