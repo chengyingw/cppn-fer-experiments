@@ -1,0 +1,119 @@
+{
+ "table_sha256": "9819ac464b60",
+ "rows": 2480,
+ "claims": [
+  {
+   "id": "K9101",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: the low value of 5% replay is partly about where the points go. With half of the same budget on earlier discs, forget is at most 0.6 of uniform replay on skull and butterfly; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "focus_forget_skull: ratio=0.187 (G0_r0.05_focus0.5=0.03617, replay0.05=0.1939)"
+    },
+    {
+     "state": "PASS",
+     "message": "focus_forget_butterfly: ratio=0.240 (G0_r0.05_focus0.5=0.04852, replay0.05=0.2022)"
+    }
+   ]
+  },
+  {
+   "id": "K9102",
+   "verdict": "MIXED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: focusing that budget does not give up the background: background is at most 2 times uniform replay on all tasks; >= 4 times falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "focus_background_skull: ratio=1.414 (G0_r0.05_focus0.5=0.1804, replay0.05=0.1276)"
+    },
+    {
+     "state": "PASS",
+     "message": "focus_background_butterfly: ratio=1.552 (G0_r0.05_focus0.5=0.1124, replay0.05=0.07245)"
+    },
+    {
+     "state": "BAND",
+     "message": "focus_background_apple: ratio=2.555 (G0_r0.05_focus0.5=0.08593, replay0.05=0.03363)"
+    }
+   ]
+  },
+  {
+   "id": "K9103",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: with every pixel, the network's own earlier output is nearly as good as stored targets, with no stored data: median forget at most 0.05 on skull and butterfly; >= 0.15 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "snapshot_all_skull: median=0.011 (G0_r1_snapshot)"
+    },
+    {
+     "state": "PASS",
+     "message": "snapshot_all_butterfly: median=0.015 (G0_r1_snapshot)"
+    }
+   ]
+  },
+  {
+   "id": "K9104",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: at 5% of pixels, snapshot labels do not lose much to stored targets: forget ratio at most 1.2 on skull and butterfly; >= 1.5 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "snapshot_5pct_skull: ratio=0.746 (G0_r0.05_snapshot=0.1447, replay0.05=0.1939)"
+    },
+    {
+     "state": "PASS",
+     "message": "snapshot_5pct_butterfly: ratio=0.754 (G0_r0.05_snapshot=0.1526, replay0.05=0.2022)"
+    }
+   ]
+  },
+  {
+   "id": "K9105",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim, informed by a post-hoc reading of the budget test: 5% replay at least halves background against none on all tasks; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "background_5pct_skull: ratio=0.329 (replay0.05=0.1276, replay0=0.3874)"
+    },
+    {
+     "state": "PASS",
+     "message": "background_5pct_butterfly: ratio=0.071 (replay0.05=0.07245, replay0=1.024)"
+    },
+    {
+     "state": "PASS",
+     "message": "background_5pct_apple: ratio=0.064 (replay0.05=0.03363, replay0=0.5276)"
+    }
+   ]
+  },
+  {
+   "id": "K9106",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: a total-variation penalty at strength 0.05 (Xu 2026) does not by itself reduce forgetting. Against dense networks stopped at the same fit, forget at no replay stays at least 0.9 of theirs on skull and butterfly; <= 0.5 falsifies. Networks missing MSE < 0.01 are dropped before this comparison, and the penalty differs in detail from the thesis, whose continual tests were on MNIST weights.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "tv_forget_skull: ratio=0.901 (tv0.05_r0=0.2418, m0.05_r0=0.2685)"
+    },
+    {
+     "state": "PASS",
+     "message": "tv_forget_butterfly: ratio=1.112 (tv0.05_r0=0.2162, m0.05_r0=0.1944)"
+    }
+   ]
+  },
+  {
+   "id": "K9107",
+   "verdict": "VERIFIED",
+   "text": "Regime: as K9001 to K9004, on the A100, at the training learning rate. Fully fitted dense networks unless stated. Informed by the replay-budget results, so these are not blind tests. Rows share networks, so medians describe these networks. Forget is error regained on earlier discs; background is change in regions never edited; R_after is error left on a disc when its phase ends. Each is read together with the others, since a network that does not learn has low forget. Claim: that penalty does not slow learning much at no replay: R_after at most 1.5 times the matched dense networks on skull and butterfly; >= 3 times falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "tv_learning_skull: ratio=0.922 (tv0.05_r0=0.00124, m0.05_r0=0.001345)"
+    },
+    {
+     "state": "PASS",
+     "message": "tv_learning_butterfly: ratio=1.079 (tv0.05_r0=0.02289, m0.05_r0=0.02121)"
+    }
+   ]
+  }
+ ]
+}
