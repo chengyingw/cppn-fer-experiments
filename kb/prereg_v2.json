@@ -1,0 +1,475 @@
+[
+ {
+  "claim_id": "C-019",
+  "statement": "At the training learning rate, a Picbreeder start leaves at least twice the remaining edit error of a fully fitted dense network after 2000 steps, on skull and butterfly.",
+  "scope": "phase0/continual_v2.py at 2000 steps, 64x64, same edits and optimizer as C-011 to C-018, learning rate stated per check. R is remaining error toward the new target, relative to the edit's size; its normalization does not depend on the network. Only fully fitted networks: PBd, PBa, G0. Written after seeing the earlier continual-learning results, so these are remeasurements with informed predictions, not blind tests. Picbreeder is one network per task and its edits are not independent samples, so results describe these networks and do not generalize to Picbreeder networks. Medians are descriptive. R at a fixed step needs no censoring.",
+  "group": "PBd",
+  "flip_boundary": "Learning rate may reverse this, which C-020 tests. Apple is left out: earlier results showed both groups near 0.22 of E0 there on local edits.",
+  "prediction": "R2000 ratio PBd / G0 >= 2 on every edit class. Ratio <= 1 falsifies. Between them is MIXED.",
+  "checks": [
+   {
+    "check_id": "c019_skull_local_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_skull_local_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_skull_warp_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_skull_warp_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_butterfly_local_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_butterfly_local_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_butterfly_warp_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c019_butterfly_warp_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-020",
+  "statement": "Lowering the learning rate tenfold does not remove the gap in remaining edit error on skull and butterfly, so the gap is not only a learning-rate mismatch.",
+  "scope": "phase0/continual_v2.py at 2000 steps, 64x64, same edits and optimizer as C-011 to C-018, learning rate stated per check. R is remaining error toward the new target, relative to the edit's size; its normalization does not depend on the network. Only fully fitted networks: PBd, PBa, G0. Written after seeing the earlier continual-learning results, so these are remeasurements with informed predictions, not blind tests. Picbreeder is one network per task and its edits are not independent samples, so results describe these networks and do not generalize to Picbreeder networks. Medians are descriptive. R at a fixed step needs no censoring.",
+  "group": "PBd",
+  "flip_boundary": "Earlier adaptation counts improved for PBd warps at this rate, so warps are the most likely to break this. Other rates and larger budgets are not covered.",
+  "prediction": "At lr_scale 0.1, R2000 ratio PBd / G0 >= 2 on every edit class. Ratio <= 1 falsifies. Between them is MIXED. The analyst expects MIXED, driven by symmetric warps.",
+  "checks": [
+   {
+    "check_id": "c020_skull_local_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_skull_local_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_skull_warp_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_skull_warp_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_butterfly_local_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_butterfly_local_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_butterfly_warp_sym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_sym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c020_butterfly_warp_asym",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_asym",
+     "lr_scale": 0.1
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": ">=",
+     "value": 2.0
+    },
+    "fail": {
+     "op": "<=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-021",
+  "statement": "Local edits on apple are hard for both starts: neither leaves less than half the other's remaining edit error after 2000 steps.",
+  "scope": "phase0/continual_v2.py at 2000 steps, 64x64, same edits and optimizer as C-011 to C-018, learning rate stated per check. R is remaining error toward the new target, relative to the edit's size; its normalization does not depend on the network. Only fully fitted networks: PBd, PBa, G0. Written after seeing the earlier continual-learning results, so these are remeasurements with informed predictions, not blind tests. Picbreeder is one network per task and its edits are not independent samples, so results describe these networks and do not generalize to Picbreeder networks. Medians are descriptive. R at a fixed step needs no censoring.",
+  "group": "PBd",
+  "flip_boundary": "This is limited by the step budget and says nothing of the error reachable with more steps.",
+  "prediction": "At lr_scale 1, R2000 ratio PBd / G0 is at most 1.5 for both local classes, and at least 1 / 1.5 in the reverse direction. A ratio >= 2 either way falsifies. Between them is MIXED.",
+  "checks": [
+   {
+    "check_id": "c021_local_sym_pb_over_dense",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 2.0
+    }
+   },
+   {
+    "check_id": "c021_local_asym_pb_over_dense",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 2.0
+    }
+   },
+   {
+    "check_id": "c021_local_sym_dense_over_pb",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "G0",
+    "group_b": "PBd",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 2.0
+    }
+   },
+   {
+    "check_id": "c021_local_asym_dense_over_pb",
+    "type": "ratio",
+    "table": "v2",
+    "metric": "R2000",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "G0",
+    "group_b": "PBd",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 2.0
+    }
+   }
+  ],
+  "parents": []
+ }
+]

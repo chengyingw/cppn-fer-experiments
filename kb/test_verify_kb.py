@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from verify_kb import (BAND, FAIL, NODATA, PASS, Store, add_claim, integrity_errors, merge_claims, run_check, verdict,
-                       withdraw_claim)
+from verify_kb import (BAND, FAIL, NODATA, PASS, Store, add_claim, add_note, integrity_errors, merge_claims, run_check,
+                       verdict, withdraw_claim)
 
 
 def row(group, value, task='t', fit=True):
@@ -48,6 +48,19 @@ class Checks(unittest.TestCase):
             self.assertEqual(run_check(check, rows(v))[0], want)
         self.assertEqual(run_check(check, [row('A', 0.1), row('B', 1.0), row('B', 1.0)])[0], NODATA)
         self.assertEqual(run_check(check, [row('A', 0.1), row('A', 0.1), row('B', 0.0), row('B', 0.0)])[0], NODATA)
+
+    def test_both_groups_censored_is_no_data(self):
+        check = dict(check_id='q', type='ratio', metric='m', where=dict(task='t'), group_a='A', group_b='B',
+                     censored_at=2000, **{'pass': dict(op='<=', value=1.5), 'fail': dict(op='>=', value=3.0)})
+        both = [row('A', 2000), row('A', 2000), row('B', 2000), row('B', 2000)]
+        self.assertEqual(run_check(check, both)[0], NODATA)
+        one = [row('A', 2000), row('A', 2000), row('B', 50), row('B', 50)]
+        self.assertEqual(run_check(check, one)[0], FAIL)
+
+    def test_checks_read_only_their_own_table(self):
+        v2 = [dict(r, _table='v2') for r in self.refs + [row('T', 0.9), row('T', 0.9)]]
+        self.assertEqual(run_check(position(), v2)[0], NODATA)
+        self.assertEqual(run_check(dict(position(), table='v2'), v2)[0], PASS)
 
     def test_verdict_precedence(self):
         self.assertEqual(verdict([(PASS, ''), (NODATA, ''), (FAIL, '')]), 'FALSIFIED')
@@ -103,6 +116,12 @@ class Lineage(unittest.TestCase):
         self.store.claims['B']['group'] = 'unrun'
         withdraw_claim(self.store, 'B', 'design error found before data')
         self.assertEqual(self.store.claims['B']['status'], 'WITHDRAWN')
+
+    def test_removing_a_logged_note_is_detected(self):
+        add_note(self.store, 'A', 'censored at the budget')
+        self.assertEqual(integrity_errors(self.store), [])
+        self.store.claims['A'].pop('note')
+        self.assertTrue(any('note' in e for e in integrity_errors(self.store)))
 
     def test_status_change_is_not_tampering(self):
         self.store.claims['A']['status'] = 'FALSIFIED'

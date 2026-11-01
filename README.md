@@ -8,7 +8,7 @@
 - 差距的来源**还没有回答**，主要因为稀疏网络在 5 万步内大多达不到拟合门槛（MSE < 0.01）。这也不是进化接线独有的问题：SGD 网络剪枝后同样难以达标（`phase0/out/report_sparse_fit.png`）。
 - Picbreeder 的接线本身会强制对称：skull、butterfly、apple 分别有 82%、59%、38% 的不同特征图，无论权重取什么都对称（`report_wiring_forced.png`）。
 - apple 上 M3a、M4a 的差距随拟合水平变化：稠密网络在 MSE 约 0.0065 提前停止时，这两个指标已接近 Picbreeder。butterfly 上差距不受此影响（`report_fit_level.png`）。
-- **持续学习**：预注册的 C-011 到 C-018 全部证伪，“Picbreeder 起点更利于学习小改动”失去主要支撑。在 2000 步内，它在 skull 和 butterfly 上几乎学不会，稠密网络全部学会（`report_continual.png`）。例外是 apple 的局部改动：训练到底的稠密网络同样很少达标（2/18），最终误差和 Picbreeder 接近。图中提前停止组（G0e）的高适应率不可比：适应标准含网络自身的旧误差，G0e 的门槛因此宽松得多。apple 上它的最终误差（0.247 E0）其实高于训练到底的 G0（0.219 E0），所以这不说明“越收敛越改不动”。
+- **持续学习**：预注册的 C-011 到 C-018 全部证伪，“Picbreeder 起点更利于学习小改动”失去主要支撑。在 2000 步内，它在 skull 和 butterfly 上几乎学不会，稠密网络全部学会（`report_continual.png`）。例外是 apple 的局部改动：训练到底的稠密网络同样很少达标（2/18），最终误差和 Picbreeder 接近。图中提前停止组（G0e）的高适应率不可比：适应标准含网络自身的旧误差，G0e 的门槛因此宽松得多。apple 上它的最终误差（0.247 E0）其实高于训练到底的 G0（0.219 E0），所以这不说明“越收敛越改不动”。分开看，局部不对称是 0.253 对 0.217，局部对称反过来是 0.177 对 0.220，两者没有稳定的高低。
 - Picbreeder 是否“破坏更小”**没有测成**，因为它很少适应成功。连续学多个任务时的遗忘也还没有测。
 
 每条结论的状态以 `kb/kb_claims.json` 为准，可以用下面的命令重放。
@@ -23,6 +23,7 @@
 | `phase0/train_control.py` | 稀疏对照：G1a、G1b、G4 |
 | `phase0/metrics.py`、`phase0/eval_controls.py` | 指标定义，以及把所有网络测量后写入数据库 |
 | `phase0/continual.py` | 持续学习测试：已拟合的网络再学 12 种小改动 |
+| `phase0/continual_v2.py`、`kb/continual_db_v2.jsonl` | 重测：固定步数记录改动区域的剩余误差和区域外变动，指标不依赖被测网络 |
 | `phase0/calibrate.py`、`phase0/figures.py` | 第 0 阶段校准和图 |
 | `phase0/report_figures.py` | 从测量表生成汇报图（`phase0/out/report_*.png`） |
 | `phase0/runs/`、`phase0/out/` | 训练好的权重、校准结果和图 |

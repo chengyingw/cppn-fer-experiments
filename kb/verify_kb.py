@@ -39,6 +39,9 @@ class Store:
         for path in (self.db_path, self.db_path.with_name('continual_db.jsonl')):
             if path.exists():
                 out += [json.loads(l) for l in path.read_text('utf-8').splitlines() if l.strip()]
+        v2 = self.db_path.with_name('continual_db_v2.jsonl')
+        if v2.exists():  # reused group names must not reach checks written against the older tables
+            out += [dict(json.loads(l), _table='v2') for l in v2.read_text('utf-8').splitlines() if l.strip()]
         return out
 
     def log(self):
@@ -49,11 +52,11 @@ class Store:
     def save(self):
         self.claims_path.write_text(json.dumps(self.claims, ensure_ascii=False, indent=1), 'utf-8')
 
-    def commit(self, op, claim):
+    def commit(self, op, claim, **extra):
         log = self.log()
         rec = dict(seq=len(log), time=datetime.now(timezone.utc).isoformat(timespec='seconds'), op=op,
                    claim_id=claim['claim_id'], claim_sha256=claim_hash(claim),
-                   prev=sha(json.dumps(log[-1], sort_keys=True)) if log else None)
+                   prev=sha(json.dumps(log[-1], sort_keys=True)) if log else None, **extra)
         with self.log_path.open('a', encoding='utf-8') as f:
             f.write(json.dumps(rec, ensure_ascii=False) + '\n')
 
@@ -78,6 +81,7 @@ def group_median(rows, where, metric, min_n=1):
 def run_check(check, rows):
     """Returns (PASS | FAIL | BAND | NODATA, message)."""
     cid = check['check_id']
+    rows = [r for r in rows if r.get('_table') == check.get('table')]
     if check['type'] == 'count':
         if len(select(rows, check['where_total'])) < check['min_total']:
             return NODATA, f'{cid}: fewer than {check["min_total"]} runs'
@@ -109,6 +113,8 @@ def run_check(check, rows):
         b = group_median(rows, dict(w, group=check['group_b']), m, check.get('min_n', 2))
         if a is None or b is None or b <= 0:
             return NODATA, f'{cid}: not enough data ({check["group_a"]}={a}, {check["group_b"]}={b})'
+        if 'censored_at' in check and a >= check['censored_at'] and b >= check['censored_at']:
+            return NODATA, f'{cid}: both groups censored at {check["censored_at"]}'
         q = a / b
         msg = f'{cid}: ratio={q:.3f} ({check["group_a"]}={a:.4g}, {check["group_b"]}={b:.4g})'
         if OPS[check['pass']['op']](q, check['pass']['value']):
@@ -177,19 +183,31 @@ def withdraw_claim(store, cid, reason):
     store.commit('withdraw', claim)
 
 
+def add_note(store, cid, note):
+    """Notes do not change a frozen claim, but each one is logged so that editing or removing it is detected."""
+    claim = store.claims[cid]
+    claim['note'] = note
+    store.save()
+    store.commit('note', claim, note_sha256=sha(note))
+
+
 def integrity_errors(store):
     errors, log, prev = [], store.log(), None
-    logged = {}
+    logged, notes = {}, {}
     for rec in log:
         if rec['prev'] != prev:
             errors.append(f'commit log broken at seq {rec["seq"]}')
         prev = sha(json.dumps(rec, sort_keys=True))
         logged[rec['claim_id']] = rec['claim_sha256']
+        if 'note_sha256' in rec:
+            notes[rec['claim_id']] = rec['note_sha256']
     for cid, claim in store.claims.items():
         if cid not in logged:
             errors.append(f'{cid} has no commit')
         elif logged[cid] != claim_hash(claim):
             errors.append(f'{cid}: statement, prediction or checks changed after logging')
+        if cid in notes and sha(claim.get('note', '')) != notes[cid]:
+            errors.append(f'{cid}: logged note was edited or removed')
         for c in ancestor_checks(store, claim):
             if c not in {x['check_id'] for x in claim['checks']}:
                 errors.append(f'{cid} dropped inherited check {c}')
