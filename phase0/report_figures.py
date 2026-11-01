@@ -128,7 +128,8 @@ def fig_continual(rows):
     axes[0].set_ylabel('2000 步内达到适应标准的比例（%）')
     handles, labels = axes[1].get_legend_handles_labels()
     fig.legend(handles, labels, ncol=4, frameon=False, fontsize=9, loc='lower center')
-    fig.suptitle('Picbreeder 起点很少能适应；训练到底的稠密网络在苹果的局部改动上同样失败', x=0.01, ha='left', fontsize=11)
+    fig.suptitle('Picbreeder 起点很少能适应；训练到底的稠密网络在苹果的局部改动上同样很少达标（提前停止组门槛更宽松，不可直接比较）',
+                 x=0.01, ha='left', fontsize=10)
     fig.tight_layout(rect=(0, 0.07, 1, 0.94))
     fig.savefig(os.path.join(OUT, 'report_continual.png'), dpi=160)
     plt.close(fig)

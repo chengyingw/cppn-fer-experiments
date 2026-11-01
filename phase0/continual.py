@@ -8,8 +8,11 @@ edges only), G0 (fully fitted dense SGD), G0e (dense SGD stopped at MSE <= 0.006
 
 Recorded per network and edit, every 10 steps:
   A1     steps until MSE on the new target <= the network's MSE on the old target + 10% of the edit's size E0
-  F      mean squared change of the network's own output outside the edited region, divided by E0. Measuring change
-         from its own starting output keeps a network's fit level out of this number. Local edits only.
+  F      mean squared change of the network's own output outside the edited region, divided by E0. Local edits only.
+
+Known limits: A1 is right-censored at the step budget. A1's threshold and F both depend on fit level: a coarse network
+gets a looser threshold from its larger old error, and F includes its continued fitting of the old image, so G0e is not
+directly comparable with the fully fitted groups.
 """
 import argparse
 import glob

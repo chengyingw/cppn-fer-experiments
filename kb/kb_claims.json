@@ -938,7 +938,8 @@
    }
   ],
   "parents": [],
-  "status": "VERIFIED"
+  "status": "VERIFIED",
+  "note": "G0e has a looser adaptation threshold and a higher F than fully fitted groups in phase0/continual.py; this does not affect the M3a and M4a checks here."
  },
  "C-008": {
   "claim_id": "C-008",
@@ -1312,7 +1313,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-012": {
   "claim_id": "C-012",
@@ -1450,7 +1452,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-013": {
   "claim_id": "C-013",
@@ -1525,7 +1528,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-014": {
   "claim_id": "C-014",
@@ -1600,7 +1604,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-015": {
   "claim_id": "C-015",
@@ -1738,7 +1743,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-016": {
   "claim_id": "C-016",
@@ -1876,7 +1882,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-017": {
   "claim_id": "C-017",
@@ -1951,7 +1958,8 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  },
  "C-018": {
   "claim_id": "C-018",
@@ -2026,6 +2034,7 @@
    }
   ],
   "parents": [],
-  "status": "FALSIFIED"
+  "status": "FALSIFIED",
+  "note": "A1c is right-censored at 2000 steps, so its ratios are lower bounds, not measured ratios. Where both groups are censored, ratio 1.0 and its PASS carry no information. PB is one network per task, and edits on it are not independent samples. The falsification rests on the lower bounds on other tasks and does not change."
  }
 }
