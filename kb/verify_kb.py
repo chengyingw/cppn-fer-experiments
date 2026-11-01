@@ -35,9 +35,11 @@ class Store:
         self.claims = json.loads(self.claims_path.read_text('utf-8')) if self.claims_path.exists() else {}
 
     def rows(self):
-        if not self.db_path.exists():
-            return []
-        return [json.loads(l) for l in self.db_path.read_text('utf-8').splitlines() if l.strip()]
+        out = []
+        for path in (self.db_path, self.db_path.with_name('continual_db.jsonl')):
+            if path.exists():
+                out += [json.loads(l) for l in path.read_text('utf-8').splitlines() if l.strip()]
+        return out
 
     def log(self):
         if not self.log_path.exists():
@@ -98,6 +100,20 @@ def run_check(check, rows):
         if OPS[check['pass']['op']](r, check['pass']['value']):
             return PASS, msg
         if OPS[check['fail']['op']](r, check['fail']['value']):
+            return FAIL, msg
+        return BAND, msg
+    if check['type'] == 'ratio':
+        # median of group_a / median of group_b over the rows selected by `where`
+        w, m = check['where'], check['metric']
+        a = group_median(rows, dict(w, group=check['group_a']), m, check.get('min_n', 2))
+        b = group_median(rows, dict(w, group=check['group_b']), m, check.get('min_n', 2))
+        if a is None or b is None or b <= 0:
+            return NODATA, f'{cid}: not enough data ({check["group_a"]}={a}, {check["group_b"]}={b})'
+        q = a / b
+        msg = f'{cid}: ratio={q:.3f} ({check["group_a"]}={a:.4g}, {check["group_b"]}={b:.4g})'
+        if OPS[check['pass']['op']](q, check['pass']['value']):
+            return PASS, msg
+        if OPS[check['fail']['op']](q, check['fail']['value']):
             return FAIL, msg
         return BAND, msg
     raise ValueError(f'{cid}: unknown check type {check["type"]}')

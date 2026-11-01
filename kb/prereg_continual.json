@@ -1,0 +1,846 @@
+[
+ {
+  "claim_id": "C-011",
+  "statement": "Starting from Picbreeder (PBd), a network learns a local symmetric edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBd starts from Picbreeder with every weight free, so its search space equals G0's. A 30-step smoke test, seen before registration, showed PBd MSE rising at first, because Adam moves all zero weights at once. No full run had been seen. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBd",
+  "flip_boundary": "A slower learner moves less per step, so the speed checks guard against reading slowness as low interference.",
+  "prediction": "On each task, median F of PBd is at most 0.5 times G0's, and median A1c at most 1.5 times G0's. F ratio >= 1 or A1c ratio >= 3 falsifies. Between them is MIXED. F needs at least 3 adapted runs. Expectation: the smoke test makes the analyst doubt this for PBd.",
+  "checks": [
+   {
+    "check_id": "c011_f_skull",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c011_f_butterfly",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c011_f_apple",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c011_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c011_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c011_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-012",
+  "statement": "Starting from Picbreeder (PBd), a network learns a local symmetry-breaking edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBd starts from Picbreeder with every weight free, so its search space equals G0's. A 30-step smoke test, seen before registration, showed PBd MSE rising at first, because Adam moves all zero weights at once. No full run had been seen. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBd",
+  "flip_boundary": "A slower learner moves less per step, so the speed checks guard against reading slowness as low interference.",
+  "prediction": "On each task, median F of PBd is at most 0.5 times G0's, and median A1c at most 1.5 times G0's. F ratio >= 1 or A1c ratio >= 3 falsifies. Between them is MIXED. F needs at least 3 adapted runs. Expectation: the analyst expects falsified.",
+  "checks": [
+   {
+    "check_id": "c012_f_skull",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c012_f_butterfly",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c012_f_apple",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c012_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c012_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c012_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-013",
+  "statement": "Starting from Picbreeder (PBd), a network adapts to a symmetric horizontal scale warp of its image at least twice as fast as a fully fitted dense network.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBd starts from Picbreeder with every weight free, so its search space equals G0's. A 30-step smoke test, seen before registration, showed PBd MSE rising at first, because Adam moves all zero weights at once. No full run had been seen. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBd",
+  "flip_boundary": "A warp may be few weights away for Picbreeder because it generated the target.",
+  "prediction": "On each task, median A1c of PBd is at most 0.5 times G0's. Ratio >= 1 falsifies. Between them is MIXED. Expectation: uncertain, given the smoke test.",
+  "checks": [
+   {
+    "check_id": "c013_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c013_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c013_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-014",
+  "statement": "Starting from Picbreeder (PBd), a network adapts to a horizontal shift warp of its image at least twice as fast as a fully fitted dense network.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBd starts from Picbreeder with every weight free, so its search space equals G0's. A 30-step smoke test, seen before registration, showed PBd MSE rising at first, because Adam moves all zero weights at once. No full run had been seen. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBd",
+  "flip_boundary": "A warp may be few weights away for Picbreeder because it generated the target.",
+  "prediction": "On each task, median A1c of PBd is at most 0.5 times G0's. Ratio >= 1 falsifies. Between them is MIXED. Expectation: the analyst expects falsified.",
+  "checks": [
+   {
+    "check_id": "c014_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c014_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c014_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBd",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-015",
+  "statement": "Starting from Picbreeder (PBa), a network learns a local symmetric edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBa starts from Picbreeder and trains existing edges only, so it cannot add wiring. It was added after the PBd smoke test and has far fewer parameters than G0, so it is not the same search space. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBa",
+  "flip_boundary": "A slower learner moves less per step, so the speed checks guard against reading slowness as low interference.",
+  "prediction": "On each task, median F of PBa is at most 0.5 times G0's, and median A1c at most 1.5 times G0's. F ratio >= 1 or A1c ratio >= 3 falsifies. Between them is MIXED. F needs at least 3 adapted runs. Expectation: the FER paper implies this should hold; it is also the edit type most favourable to a mirror-symmetric representation.",
+  "checks": [
+   {
+    "check_id": "c015_f_skull",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c015_f_butterfly",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c015_f_apple",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c015_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c015_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c015_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-016",
+  "statement": "Starting from Picbreeder (PBa), a network learns a local symmetry-breaking edit with much less disturbance outside the edit than a fully fitted dense network, without being much slower.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBa starts from Picbreeder and trains existing edges only, so it cannot add wiring. It was added after the PBd smoke test and has far fewer parameters than G0, so it is not the same search space. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBa",
+  "flip_boundary": "A slower learner moves less per step, so the speed checks guard against reading slowness as low interference.",
+  "prediction": "On each task, median F of PBa is at most 0.5 times G0's, and median A1c at most 1.5 times G0's. F ratio >= 1 or A1c ratio >= 3 falsifies. Between them is MIXED. F needs at least 3 adapted runs. Expectation: the analyst expects MIXED or falsified: the wiring forces much of the symmetry and cannot change here, so one-sided edits may be out of reach.",
+  "checks": [
+   {
+    "check_id": "c016_f_skull",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c016_f_butterfly",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c016_f_apple",
+    "type": "ratio",
+    "metric": "F",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c016_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c016_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   },
+   {
+    "check_id": "c016_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "local_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 1.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 3.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-017",
+  "statement": "Starting from Picbreeder (PBa), a network adapts to a symmetric horizontal scale warp of its image at least twice as fast as a fully fitted dense network.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBa starts from Picbreeder and trains existing edges only, so it cannot add wiring. It was added after the PBd smoke test and has far fewer parameters than G0, so it is not the same search space. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBa",
+  "flip_boundary": "A warp may be few weights away for Picbreeder because it generated the target.",
+  "prediction": "On each task, median A1c of PBa is at most 0.5 times G0's. Ratio >= 1 falsifies. Between them is MIXED. Expectation: the analyst expects this to hold, helped by the generator bias.",
+  "checks": [
+   {
+    "check_id": "c017_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c017_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c017_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "warp_sym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ },
+ {
+  "claim_id": "C-018",
+  "statement": "Starting from Picbreeder (PBa), a network adapts to a horizontal shift warp of its image at least twice as fast as a fully fitted dense network.",
+  "scope": "phase0/continual.py: 2000 steps of Adam with unit-norm gradients at each task's training learning rate (lr_scale 1), 64x64. G0 is fully fitted dense SGD, including seeds from batch b6. Three edits per class per task. Rows share networks, so medians are descriptive summaries, not independent samples; Picbreeder is one network per task. lr_scale 0.1 rows are descriptive and count toward no check. PBa starts from Picbreeder and trains existing edges only, so it cannot add wiring. It was added after the PBd smoke test and has far fewer parameters than G0, so it is not the same search space. Known biases: Picbreeder weights are larger, so one learning rate is a smaller relative step on existing edges, which can lower interference and slow adaptation; warp targets come from the Picbreeder generator itself.",
+  "group": "PBa",
+  "flip_boundary": "A warp may be few weights away for Picbreeder because it generated the target.",
+  "prediction": "On each task, median A1c of PBa is at most 0.5 times G0's. Ratio >= 1 falsifies. Between them is MIXED. Expectation: uncertain: a shift breaks the mirror axis, yet the target still comes from the Picbreeder generator.",
+  "checks": [
+   {
+    "check_id": "c018_a1_skull",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "skull",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c018_a1_butterfly",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "butterfly",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   },
+   {
+    "check_id": "c018_a1_apple",
+    "type": "ratio",
+    "metric": "A1c",
+    "where": {
+     "task": "apple",
+     "edit_class": "warp_asym",
+     "lr_scale": 1.0
+    },
+    "group_a": "PBa",
+    "group_b": "G0",
+    "min_n": 3,
+    "pass": {
+     "op": "<=",
+     "value": 0.5
+    },
+    "fail": {
+     "op": ">=",
+     "value": 1.0
+    }
+   }
+  ],
+  "parents": []
+ }
+]

@@ -40,6 +40,15 @@ class Checks(unittest.TestCase):
         self.assertEqual(run_check(check, rows)[0], PASS)
         self.assertEqual(run_check(dict(check, min_n=3), rows)[0], NODATA)
 
+    def test_ratio_bands_and_missing_data(self):
+        check = dict(check_id='q', type='ratio', metric='m', where=dict(task='t'), group_a='A', group_b='B',
+                     **{'pass': dict(op='<=', value=0.5), 'fail': dict(op='>=', value=1.0)})
+        rows = lambda a: [row('A', a), row('A', a), row('B', 1.0), row('B', 1.0)]
+        for v, want in [(0.4, PASS), (0.7, BAND), (1.2, FAIL)]:
+            self.assertEqual(run_check(check, rows(v))[0], want)
+        self.assertEqual(run_check(check, [row('A', 0.1), row('B', 1.0), row('B', 1.0)])[0], NODATA)
+        self.assertEqual(run_check(check, [row('A', 0.1), row('A', 0.1), row('B', 0.0), row('B', 0.0)])[0], NODATA)
+
     def test_verdict_precedence(self):
         self.assertEqual(verdict([(PASS, ''), (NODATA, ''), (FAIL, '')]), 'FALSIFIED')
         self.assertEqual(verdict([(PASS, ''), (NODATA, ''), (BAND, '')]), 'INCONCLUSIVE')
@@ -59,6 +68,10 @@ class Lineage(unittest.TestCase):
 
     def tearDown(self):
         self.dir.cleanup()
+
+    def test_rows_come_from_both_tables(self):
+        self.store.db_path.with_name('continual_db.jsonl').write_text(json.dumps(row('X', 1.0)), 'utf-8')
+        self.assertEqual(len(self.store.rows()), 9)
 
     def test_merge_inherits_parent_checks_and_rejects_regression(self):
         with self.assertRaises(ValueError):
