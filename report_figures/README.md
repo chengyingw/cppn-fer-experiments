@@ -1,6 +1,8 @@
 # 结果图和解释
 
-这里的图都能从仓库里的表和日志重画：`python make_figures.py`。fig01、fig02、fig04、fig05、fig10 是已有的图，其余是从结果表新画的。
+`python make_figures.py` 从表和日志重画新图，并复制已有的 fig01、fig02、fig04、fig05、fig10。有两处不能完全重现：fig03 左图的数字是手工写入脚本的，来自 `apple_plateau.py` 的输出，那份输出没有存档；fig10 的生成脚本是临时写的，没有提交。
+
+这些图只适合内部汇报，还不符合论文发表的规范，主要缺不确定性的表达和样本量标注。
 
 ## CPPN 和 kb-loop 是什么关系
 
