@@ -1,0 +1,5 @@
+orig_shared     median cost by edit [6.0, 4.0, 4.0, 4.0] ratio 0.867 censored 0/48
+orig_unrelated  median cost by edit [40.0, 40.0, 40.0, 40.0] ratio 0.838 censored 36/48
+tile_shared     median cost by edit [6.5, 9.0, 12.5, 7.5] ratio 1.649 censored 2/48
+tile_unrelated  median cost by edit [34.5, 31.0, 19.5, 13.0] ratio 0.569 censored 17/48
+training took 10.5 s, cap 40

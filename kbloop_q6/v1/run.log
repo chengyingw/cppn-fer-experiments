@@ -1,0 +1,5 @@
+orig_shared     median cost by edit [100.0, 100.0, 100.0, 100.0] ratio 1.000 censored 48/48
+orig_unrelated  median cost by edit [100.0, 100.0, 100.0, 100.0] ratio 1.000 censored 48/48
+shuf_shared     median cost by edit [100.0, 100.0, 100.0, 100.0] ratio 1.000 censored 48/48
+shuf_unrelated  median cost by edit [100.0, 100.0, 100.0, 100.0] ratio 1.000 censored 48/48
+training took 16.9 s, cap 100

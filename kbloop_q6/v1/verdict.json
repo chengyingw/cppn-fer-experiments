@@ -1,0 +1,50 @@
+{
+ "table_sha256": "13dbf5f45c57",
+ "rows": 48,
+ "claims": [
+  {
+   "id": "K9501",
+   "verdict": "FALSIFIED",
+   "text": "A five-second toy, not a lab run: random starts, a 32 by 32 image, three small networks with the activation mix of the skull networks, RTX 4060. Cost is the steps until an edit reaches 0.2 of its size, capped at 100. cost_ratio is the mean cost of the third and fourth edits over the first. Full replay and the value channel only, so forgetting and the output clipping play no part. Claim: with coordinates as addresses and a shared pattern, later edits get cheaper: ratio at most 0.7; >= 1 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "orig_shared: median=1.000 (orig_shared)"
+    }
+   ]
+  },
+  {
+   "id": "K9502",
+   "verdict": "VERIFIED",
+   "text": "A five-second toy, not a lab run: random starts, a 32 by 32 image, three small networks with the activation mix of the skull networks, RTX 4060. Cost is the steps until an edit reaches 0.2 of its size, capped at 100. cost_ratio is the mean cost of the third and fourth edits over the first. Full replay and the value channel only, so forgetting and the output clipping play no part. Claim: that needs something to reuse: with unrelated patterns the ratio stays at least 0.9; <= 0.7 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "orig_unrelated: median=1.000 (orig_unrelated)"
+    }
+   ]
+  },
+  {
+   "id": "K9503",
+   "verdict": "VERIFIED",
+   "text": "A five-second toy, not a lab run: random starts, a 32 by 32 image, three small networks with the activation mix of the skull networks, RTX 4060. Cost is the steps until an edit reaches 0.2 of its size, capped at 100. cost_ratio is the mean cost of the third and fourth edits over the first. Full replay and the value channel only, so forgetting and the output clipping play no part. Claim: it needs the geometry: with shuffled addresses and the shared pattern the ratio stays at least 0.9; <= 0.7 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "shuf_shared: median=1.000 (shuf_shared)"
+    }
+   ]
+  },
+  {
+   "id": "K9504",
+   "verdict": "FALSIFIED",
+   "text": "A five-second toy, not a lab run: random starts, a 32 by 32 image, three small networks with the activation mix of the skull networks, RTX 4060. Cost is the steps until an edit reaches 0.2 of its size, capped at 100. cost_ratio is the mean cost of the third and fourth edits over the first. Full replay and the value channel only, so forgetting and the output clipping play no part. Claim, the condition for reading K9503: shuffled addresses still learn the first edit within the cap: median first_cost at most 90; >= 100 falsifies, and then K9503 only says nothing was learned.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "shuf_learns: median=100.000 (shuf_shared)"
+    }
+   ]
+  }
+ ]
+}
