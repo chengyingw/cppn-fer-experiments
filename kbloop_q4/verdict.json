@@ -1,0 +1,115 @@
+{
+ "table_sha256": "61bcaf1af3f9",
+ "rows": 896,
+ "claims": [
+  {
+   "id": "K9301",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: focused replay loses little without stored labels: forget at most 1.5 times focused replay with stored targets; >= 3 times falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_vs_f_skull: ratio=0.518 (G0_r0.05_focus0.5_snapshot=0.02091, G0_r0.05_focus0.5=0.04036)"
+    },
+    {
+     "state": "PASS",
+     "message": "fs_vs_f_butterfly: ratio=0.795 (G0_r0.05_focus0.5_snapshot=0.04122, G0_r0.05_focus0.5=0.05186)"
+    }
+   ]
+  },
+  {
+   "id": "K9302",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: without stored labels it still beats uniform replay with stored targets: forget at most 0.6 of it; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_vs_u_skull: ratio=0.120 (G0_r0.05_focus0.5_snapshot=0.02091, replay0.05=0.1743)"
+    },
+    {
+     "state": "PASS",
+     "message": "fs_vs_u_butterfly: ratio=0.221 (G0_r0.05_focus0.5_snapshot=0.04122, replay0.05=0.1869)"
+    }
+   ]
+  },
+  {
+   "id": "K9303",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: the same holds on pixels never used as replay pixels: forget_held at most 0.6; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_vs_u_held_skull: ratio=0.175 (G0_r0.05_focus0.5_snapshot=0.03245, replay0.05=0.1851)"
+    },
+    {
+     "state": "PASS",
+     "message": "fs_vs_u_held_butterfly: ratio=0.246 (G0_r0.05_focus0.5_snapshot=0.04776, replay0.05=0.1944)"
+    }
+   ]
+  },
+  {
+   "id": "K9304",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: focusing helps snapshot labels too: forget at most 0.6 of uniform snapshot replay; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_vs_s_skull: ratio=0.141 (G0_r0.05_focus0.5_snapshot=0.02091, G0_r0.05_snapshot=0.1488)"
+    },
+    {
+     "state": "PASS",
+     "message": "fs_vs_s_butterfly: ratio=0.277 (G0_r0.05_focus0.5_snapshot=0.04122, G0_r0.05_snapshot=0.149)"
+    }
+   ]
+  },
+  {
+   "id": "K9305",
+   "verdict": "MIXED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: this does not give up the background: at most 2 times uniform replay with stored targets on all tasks; >= 4 times falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_background_skull: ratio=1.772 (G0_r0.05_focus0.5_snapshot=0.2365, replay0.05=0.1335)"
+    },
+    {
+     "state": "BAND",
+     "message": "fs_background_butterfly: ratio=2.538 (G0_r0.05_focus0.5_snapshot=0.1712, replay0.05=0.06746)"
+    },
+    {
+     "state": "BAND",
+     "message": "fs_background_apple: ratio=3.773 (G0_r0.05_focus0.5_snapshot=0.1315, replay0.05=0.03486)"
+    }
+   ]
+  },
+  {
+   "id": "K9306",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: this does not slow learning: R_after at most 1.5 times focused replay with stored targets; >= 3 times falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "fs_learning_skull: ratio=1.013 (G0_r0.05_focus0.5_snapshot=0.001555, G0_r0.05_focus0.5=0.001535)"
+    },
+    {
+     "state": "PASS",
+     "message": "fs_learning_butterfly: ratio=0.928 (G0_r0.05_focus0.5_snapshot=0.00532, G0_r0.05_focus0.5=0.00573)"
+    }
+   ]
+  },
+  {
+   "id": "K9307",
+   "verdict": "VERIFIED",
+   "text": "Regime: the four-disc sequence of K9001 to K9004, RTX 4060, 5% replay budget, original output, at the training learning rate. Snapshot labels are the network's own output when the phase began: no stored labels, but a copy of that output and the locations of earlier discs are needed. Informed by K9101 and K9104, so not blind. forget_held is forgetting on disc pixels no later phase used as replay pixels. Apple keeps the output trap, so most checks exclude it. Claim: focusing helps snapshot labels from the Picbreeder start too, on its single network per image: forget at most 0.6 of uniform snapshot replay; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "pbd_fs_vs_s_skull: ratio=0.417 (PBd_r0.05_focus0.5_snapshot=0.05984, PBd_r0.05_snapshot=0.1436)"
+    },
+    {
+     "state": "PASS",
+     "message": "pbd_fs_vs_s_butterfly: ratio=0.287 (PBd_r0.05_focus0.5_snapshot=0.05149, PBd_r0.05_snapshot=0.1793)"
+    }
+   ]
+  }
+ ]
+}
