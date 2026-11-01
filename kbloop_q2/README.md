@@ -11,3 +11,9 @@
 见 `verdict.json`。`cppn_continual_db.jsonl` 有 2480 行。K9105 的两组和问题 1 的 A100 数字完全相同，因为是同一台机器重跑同一配置，所以它不是新证据。
 
 聚焦回放把遗忘量降到均匀回放的 0.19～0.24（K9101）。只看从未被标注的像素，比值是 0.26 和 0.32（`focus_heldout.md`，预测先提交），所以这不只是记住了标注。
+
+## 原始文件
+
+- `nets/`：这一轮训练的网络，`tv*` 带 TV 惩罚，`m*` 是拟合水平匹配的普通网络。可以直接当作 `AIQ_CPPN_ASSETS` 下的 `nets/` 使用。
+- `raw_experiments.tar.gz`：49 个实验的规格、逐行结果和 `curves.npz`，以及 `lab_db.jsonl`。用 `tar xzf` 解开。
+
