@@ -1,0 +1,50 @@
+{
+ "table_sha256": "7416c79c4365",
+ "rows": 110,
+ "claims": [
+  {
+   "id": "K9601",
+   "verdict": "VERIFIED",
+   "text": "Regime: probe.py in this folder, offline, no LLM. 30 ArchitectureIQ dataset instances from the external checkout learned one per round in 5 random orders; CPPN rows also span 5 initialisation seeds. new_acc is pair accuracy on an instance before it is learned. Small data: 30 instances and 410 candidates, so these describe this set only. Claim, the gate for wiring a CPPN into the loop, which the author expects to fail because nearest neighbours won in earlier tests: even with full replay, a CPPN predicts new instances at least 2 points better than nearest neighbours; a difference <= 0 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "cppn_vs_nn: difference=0.103 (cppn_full=0.8514, nn=0.7485)"
+    }
+   ]
+  },
+  {
+   "id": "K9602",
+   "verdict": "VERIFIED",
+   "text": "Regime: probe.py in this folder, offline, no LLM. 30 ArchitectureIQ dataset instances from the external checkout learned one per round in 5 random orders; CPPN rows also span 5 initialisation seeds. new_acc is pair accuracy on an instance before it is learned. Small data: 30 instances and 410 candidates, so these describe this set only. Claim, the premise: a CPPN updated without replay forgets, losing at least 0.05 of pair accuracy on learned instances by the end; <= 0.02 falsifies.",
+   "checks": [
+    {
+     "state": "PASS",
+     "message": "cppn_forgets: median=0.135 (cppn_none)"
+    }
+   ]
+  },
+  {
+   "id": "K9603",
+   "verdict": "FALSIFIED",
+   "text": "Regime: probe.py in this folder, offline, no LLM. 30 ArchitectureIQ dataset instances from the external checkout learned one per round in 5 random orders; CPPN rows also span 5 initialisation seeds. new_acc is pair accuracy on an instance before it is learned. Small data: 30 instances and 410 candidates, so these describe this set only. Claim, carried over from K9101: focusing half the replay budget on the old candidates nearest to the new instance keeps forgetting at most 0.6 of uniform replay; >= 0.9 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "focus_vs_uniform: ratio=1.088 (cppn_focus=0.1462, cppn_uniform=0.1344)"
+    }
+   ]
+  },
+  {
+   "id": "K9604",
+   "verdict": "FALSIFIED",
+   "text": "Regime: probe.py in this folder, offline, no LLM. 30 ArchitectureIQ dataset instances from the external checkout learned one per round in 5 random orders; CPPN rows also span 5 initialisation seeds. new_acc is pair accuracy on an instance before it is learned. Small data: 30 instances and 410 candidates, so these describe this set only. Claim, a first look at compounding: with a memory that cannot forget, later instances are predicted better than earlier ones, by at least 0.03; <= 0 falsifies.",
+   "checks": [
+    {
+     "state": "FAIL",
+     "message": "nn_compounds: median=-0.012 (nn)"
+    }
+   ]
+  }
+ ]
+}
