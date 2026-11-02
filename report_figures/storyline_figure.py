@@ -101,9 +101,17 @@ rise = [st.median(r['background'] for r in q2 if r['group'] == F and r['task'] =
         for t, _, _ in TASKS]
 header(ax, '4', '代价', f'漂移增加到 {min(rise):.1f}～{max(rise):.1f} 倍')
 
-for ax in axes:
+readings = ['同一张图，两种网络各学 4 个改动，\n比较旧改动忘了多少。越低越好。',
+            '都只复习 5% 的像素：随机撒开，或一半\n集中到旧改动上。连线是同一个网络。',
+            '集中复习的遗忘量除以均匀复习的。\n低于 1 说明集中更好，越低越好。',
+            '集中复习后，从没改动过的区域\n被带偏得更多。越低越好。']
+for ax, reading in zip(axes, readings):
     ax.tick_params(length=2)
-fig.text(0.01, -0.2,'稠密 CPPN 依次学 4 个局部改动，复习预算 5%。每个点是一个网络，连线连接同一个网络；n 为网络数，进化网络每张图只有一个。'
+    ax.text(0, -0.36, reading, transform=ax.transAxes, fontsize=8.5, va='top', linespacing=1.5,
+            bbox=dict(boxstyle='round,pad=0.4', fc='#f4f3ef', ec='none'))
+fig.text(0.01, 1.13, f'少忘的关键不在网络从哪里来，而在复习放在哪里：同样的复习量集中到旧改动上，遗忘降到约 {min(fall):.2f}～{max(fall):.2f}，'
+         f'代价是背景漂移增加。', fontsize=11.5, fontweight='bold', color=INK)
+fig.text(0.01, -0.42,'稠密 CPPN 依次学 4 个局部改动，复习预算 5%。每个点是一个网络，连线连接同一个网络；n 为网络数，进化网络每张图只有一个。'
          '第 1 格无复习（RTX 4060），第 2、4 格为 A100，第 3 格为 RTX 4060。\n'
          '目前只有 3 张简单图像，apple 受输出层截断影响未画入。', fontsize=8.5, color=MUTED)
 fig.savefig(os.path.join(HERE, 'storyline_figure.png'), dpi=300, bbox_inches='tight')
