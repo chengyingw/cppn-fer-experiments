@@ -112,7 +112,7 @@ for ax, reading in zip(axes, readings):
 fig.text(0.01, 1.13, f'少忘的关键不在网络从哪里来，而在复习放在哪里：同样的复习量集中到旧改动上，遗忘降到约 {min(fall):.2f}～{max(fall):.2f}，'
          f'代价是背景漂移增加。', fontsize=11.5, fontweight='bold', color=INK)
 fig.text(0.01, -0.42,'稠密 CPPN 依次学 4 个局部改动，复习预算 5%。每个点是一个网络，连线连接同一个网络；n 为网络数，进化网络每张图只有一个。'
-         '第 1 格无复习（RTX 4060），第 2、4 格为 A100，第 3 格为 RTX 4060。\n'
+         '实验在 kb-loop 中运行：预测先提交，结果自动判定。\n'
          '目前只有 3 张简单图像，apple 受输出层截断影响未画入。', fontsize=8.5, color=MUTED)
 fig.savefig(os.path.join(HERE, 'storyline_figure.png'), dpi=300, bbox_inches='tight')
 fig.savefig(os.path.join(HERE, 'storyline_figure.pdf'), bbox_inches='tight')

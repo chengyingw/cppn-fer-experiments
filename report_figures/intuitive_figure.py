@@ -82,7 +82,7 @@ fig.text(0.535, 0.95, 'b  遗忘量：每个点是一个网络，柱高是中位
 fig.text(0.535, 0.03, f'集中复习的代价：从没改动过的区域被带偏得更多，是均匀复习的 {min(rise):.1f}～{max(rise):.1f} 倍。\n'
          '结论在只看没复习到的点、换一台机器、不存正确答案时都成立。', fontsize=9, color=MUTED, va='top')
 fig.text(0.02, 0.03, '图 a 是骷髅上一个网络、一种学习顺序的重跑，数值与结果表中这一行一致。\n'
-         '数据：RTX 4060，原始输出；3 张简单图像，apple 受输出层截断影响未画入。', fontsize=9, color=MUTED, va='top')
+         '实验在 kb-loop 中运行：预测先提交，结果自动判定。只有 3 张简单图像，apple 未画入。', fontsize=9, color=MUTED, va='top')
 fig.savefig(os.path.join(HERE, 'intuitive_figure.png'), dpi=300, bbox_inches='tight')
 fig.savefig(os.path.join(HERE, 'intuitive_figure.pdf'), bbox_inches='tight')
 print('rise', [round(r, 2) for r in rise], 'example forget', [round(float(np.mean(f)), 3) for f in example['skull_forget']])
